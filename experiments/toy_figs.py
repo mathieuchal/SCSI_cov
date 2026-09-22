@@ -6,8 +6,9 @@ from plotstyle import *
 from toy_eval import STATS, LABELS, pit_vs_ref
 
 setup()
-TOYS = [t for t in ("iw_ri_d4", "iw_ri_d8", "iw_nonri_d8", "factor_d8") if os.path.exists(f"results/toys/{t}_stats.npz")]
-TITLE = {"iw_ri_d4": "IW, RI\nd=4, N=8", "iw_ri_d8": "IW, RI\nd=8, N=40", "iw_nonri_d8": "IW, non-RI\nd=8, N=28", "factor_d8": "Factor model\nd=8, N=28"}
+TOYS = [t for t in ("iw_ri_d4", "iw_ri_d8", "iw_ri_d20", "iw_nonri_d8", "factor_d8") if os.path.exists(f"results/toys/{t}_stats.npz")]
+TITLE = {"iw_ri_d4": "IW, RI\nd=4, N=8", "iw_ri_d8": "IW, RI\nd=8, N=40", "iw_ri_d20": "IW, RI\nd=20, N=100",
+         "iw_nonri_d8": "IW, non-RI\nd=8, N=28", "factor_d8": "Factor model\nd=8, N=28"}
 SHORT = {"logdet": "log det C", "logcond": "log cond. number", "top_share": "top-eig. share",
          "ldv_top": "log dir. var.\n(top emp. eigvec)", "ldv_bot": "log dir. var.\n(bottom emp. eigvec)", "corr01": "correlation C01"}
 D = {t: np.load(f"results/toys/{t}_stats.npz") for t in TOYS}

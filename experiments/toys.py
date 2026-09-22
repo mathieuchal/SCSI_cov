@@ -165,6 +165,7 @@ class FactorToy(Toy):
 TOYS = {
     "iw_ri_d4":    lambda device="cpu": IWToy("iw_ri_d4", 4, 8, 5000, "ri", 12.0, device=device),
     "iw_ri_d8":    lambda device="cpu": IWToy("iw_ri_d8", 8, 40, 2000, "ri", 16.0, device=device),
+    "iw_ri_d20":   lambda device="cpu": IWToy("iw_ri_d20", 20, 100, 2000, "ri", 28.0, device=device),
     "iw_nonri_d8": lambda device="cpu": IWToy("iw_nonri_d8", 8, 28, 2000, "nonri", 16.0, device=device),
     "factor_d8":   lambda device="cpu": FactorToy("factor_d8", 8, 28, 3000, device=device),
 }
