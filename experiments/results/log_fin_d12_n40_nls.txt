@@ -1,0 +1,49 @@
+N_eff scale = 0.63  ->  N = 40 (window 63), N_forward = 13;  N/d = 3.3
+
+=== fold 0: train < 1995, test 1995-2004:  M=4656 training covariances
+    test cases: 952
+    loaded results/fin_d12_nw63_s0_n40_fold0.pt
+    sampling done (529s total)
+    fold done in 603s
+
+=== fold 1: train < 2005, test 2005-2014:  M=5296 training covariances
+    test cases: 952
+    loaded results/fin_d12_nw63_s0_n40_fold1.pt
+    sampling done (383s total)
+    fold done in 498s
+
+=== fold 2: train < 2015, test 2015-2026:  M=5936 training covariances
+    test cases: 1104
+    loaded results/fin_d12_nw63_s0_n40_fold2.pt
+    sampling done (972s total)
+    fold done in 1018s
+
+=== out-of-sample min-variance portfolio (unconstrained), 21-day realised variance ===
+SCM                      ann.vol=14.796   mean log(var/var_OAS)=+0.1025 [+0.0896,+0.1157]   median fwd Stein=8.528
+OAS shrinkage            ann.vol=14.167   mean log(var/var_OAS)=+0.0000 [+0.0000,+0.0000]   median fwd Stein=7.693
+LW nonlinear shrinkage   ann.vol=14.254   mean log(var/var_OAS)=+0.0158 [+0.0108,+0.0210]   median fwd Stein=7.628
+PCA K=1                  ann.vol=15.861   mean log(var/var_OAS)=+0.2181 [+0.1998,+0.2380]   median fwd Stein=9.978
+PCA K=3                  ann.vol=14.796   mean log(var/var_OAS)=+0.1033 [+0.0901,+0.1155]   median fwd Stein=8.424
+PCA K=GD (plug-in)       ann.vol=14.852   mean log(var/var_OAS)=+0.1112 [+0.0984,+0.1243]   median fwd Stein=8.612
+PCA K=Bayes (SC-SI)      ann.vol=14.610   mean log(var/var_OAS)=+0.0742 [+0.0633,+0.0849]   median fwd Stein=8.162
+PCA K=Bayes (IW)         ann.vol=14.737   mean log(var/var_OAS)=+0.0857 [+0.0743,+0.0971]   median fwd Stein=8.295
+IW post. mean            ann.vol=14.333   mean log(var/var_OAS)=+0.0124 [+0.0068,+0.0181]   median fwd Stein=7.598
+SC-SI post. mean         ann.vol=14.112   mean log(var/var_OAS)=-0.0068 [-0.0158,+0.0018]   median fwd Stein=7.354
+SC-SI Stein-opt.         ann.vol=14.038   mean log(var/var_OAS)=-0.0230 [-0.0293,-0.0170]   median fwd Stein=7.352
+
+K selected: GD mean=2.14 (|dK|/month=0.36) ; Bayes(SC-SI) mean=5.20 (|dK|/month=1.41) ; Bayes(IW) mean=6.61
+
+=== predictive log-score of the forward 21-day covariance (vs SCM plug-in) ===
+SCM              gain vs SCM = +0.000 [+0.000,+0.000]
+OAS shrinkage    gain vs SCM = +10.293 [+8.452,+12.722]
+LW nonlinear shrinkage gain vs SCM = +10.060 [+8.533,+11.950]
+IW               gain vs SCM = +8.616 [+7.111,+10.484]
+SC-SI            gain vs SCM = +13.207 [+11.435,+15.427]
+
+=== calibration of forward directional variances (asset axes + equal weight) ===
+OAS shrinkage    coverage 50/80/95 = 0.330/0.587/0.779
+LW nonlinear shrinkage coverage 50/80/95 = 0.326/0.584/0.777
+IW               coverage 50/80/95 = 0.376/0.648/0.836
+SC-SI            coverage 50/80/95 = 0.375/0.645/0.831
+SCM              coverage 50/80/95 = 0.332/0.585/0.776
+saved fin_d12_nw63_s0_n40

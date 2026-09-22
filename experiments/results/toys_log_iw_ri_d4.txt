@@ -1,0 +1,36 @@
+  [SCSI] outer 0: loss=2.2960  (144s)  init prior
+   [val] outer 0: predictive log-score = -14.439
+  [SCSI] outer 1: loss=2.2833  (45s)  bank=40000
+  [SCSI] outer 2: loss=2.2594  (46s)  bank=40000
+   [val] outer 2: predictive log-score = -14.373
+  [SCSI] outer 3: loss=2.2418  (48s)  bank=40000
+  [SCSI] outer 4: loss=2.2195  (52s)  bank=40000
+   [val] outer 4: predictive log-score = -14.344
+  [SCSI] outer 5: loss=2.2127  (49s)  bank=40000
+  [SCSI] outer 6: loss=2.2042  (47s)  bank=40000
+   [val] outer 6: predictive log-score = -14.335
+  [SCSI] outer 7: loss=2.1936  (48s)  bank=40000
+  [SCSI] outer 8: loss=2.1793  (48s)  bank=40000
+   [val] outer 8: predictive log-score = -14.258
+  [SCSI] outer 9: loss=2.1658  (47s)  bank=40000
+  [SCSI] outer 10: loss=2.1584  (43s)  bank=40000
+   [val] outer 10: predictive log-score = -14.271
+  [SCSI] outer 11: loss=2.1495  (53s)  bank=40000
+  [SCSI] outer 12: loss=2.1444  (51s)  bank=40000
+   [val] outer 12: predictive log-score = -14.278
+  [SCSI] outer 13: loss=2.1450  (51s)  bank=40000
+  [SCSI] outer 14: loss=2.1297  (44s)  bank=40000
+  [SCSI] outer 15: loss=2.1336  (44s)  bank=40000
+  [SCSI] outer 16: loss=2.1242  (30s)  bank=40000
+   [val] outer 16: predictive log-score = -14.235
+  [SCSI] outer 17: loss=2.1204  (31s)  bank=40000
+  [SCSI] outer 18: loss=2.1218  (30s)  bank=40000
+  [SCSI] outer 19: loss=2.1093  (30s)  bank=40000
+  [SCSI] outer 20: loss=2.1094  (31s)  bank=40000
+   [val] outer 20: predictive log-score = -14.277
+  [SCSI] outer 21: loss=2.1007  (31s)  bank=40000
+  [SCSI] outer 22: loss=2.1056  (29s)  bank=40000
+  [SCSI] outer 23: loss=2.1043  (31s)  bank=40000
+  [SCSI] outer 24: loss=2.1024  (29s)  bank=40000
+   [val] outer 24: predictive log-score = -14.255
+iw_ri_d4: selected outer iteration 16  (val curve {0: -14.438576932462126, 2: -14.373393927104344, 4: -14.344281406773147, 6: -14.335434182470639, 8: -14.25761079401788, 10: -14.27119090424364, 12: -14.278132133829937, 16: -14.235027666863388, 20: -14.276730927838722, 24: -14.254702317857415})  fit 1224s

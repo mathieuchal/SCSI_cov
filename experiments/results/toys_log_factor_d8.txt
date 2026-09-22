@@ -1,0 +1,36 @@
+  [SCSI] outer 0: loss=2.6866  (221s)  init prior
+   [val] outer 0: predictive log-score = -96.810
+  [SCSI] outer 1: loss=2.6015  (62s)  bank=24000
+  [SCSI] outer 2: loss=2.5689  (66s)  bank=24000
+   [val] outer 2: predictive log-score = -95.282
+  [SCSI] outer 3: loss=2.5539  (60s)  bank=24000
+  [SCSI] outer 4: loss=2.5293  (58s)  bank=24000
+   [val] outer 4: predictive log-score = -94.742
+  [SCSI] outer 5: loss=2.5124  (59s)  bank=24000
+  [SCSI] outer 6: loss=2.5015  (57s)  bank=24000
+   [val] outer 6: predictive log-score = -94.241
+  [SCSI] outer 7: loss=2.4827  (60s)  bank=24000
+  [SCSI] outer 8: loss=2.4762  (63s)  bank=24000
+   [val] outer 8: predictive log-score = -94.191
+  [SCSI] outer 9: loss=2.4575  (64s)  bank=24000
+  [SCSI] outer 10: loss=2.4452  (55s)  bank=24000
+   [val] outer 10: predictive log-score = -93.601
+  [SCSI] outer 11: loss=2.4336  (47s)  bank=24000
+  [SCSI] outer 12: loss=2.4253  (38s)  bank=24000
+   [val] outer 12: predictive log-score = -93.468
+  [SCSI] outer 13: loss=2.4198  (38s)  bank=24000
+  [SCSI] outer 14: loss=2.4095  (40s)  bank=24000
+  [SCSI] outer 15: loss=2.3961  (39s)  bank=24000
+  [SCSI] outer 16: loss=2.3912  (38s)  bank=24000
+   [val] outer 16: predictive log-score = -93.517
+  [SCSI] outer 17: loss=2.3847  (38s)  bank=24000
+  [SCSI] outer 18: loss=2.3776  (34s)  bank=24000
+  [SCSI] outer 19: loss=2.3642  (31s)  bank=24000
+  [SCSI] outer 20: loss=2.3540  (29s)  bank=24000
+   [val] outer 20: predictive log-score = -93.186
+  [SCSI] outer 21: loss=2.3501  (29s)  bank=24000
+  [SCSI] outer 22: loss=2.3423  (30s)  bank=24000
+  [SCSI] outer 23: loss=2.3377  (29s)  bank=24000
+  [SCSI] outer 24: loss=2.3265  (29s)  bank=24000
+   [val] outer 24: predictive log-score = -93.151
+factor_d8: selected outer iteration 24  (val curve {0: -96.80979307673455, 2: -95.28215548968093, 4: -94.74218323225999, 6: -94.24083455054894, 8: -94.19054844202576, 10: -93.60128727649398, 12: -93.46775719678404, 16: -93.5166370791724, 20: -93.18565499432125, 24: -93.15082994925731})  fit 1423s

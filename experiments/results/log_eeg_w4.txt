@@ -1,0 +1,60 @@
+subjects=109 windows/run=14 d=8  samples/window=640  N_eff/n=0.0673 -> N=43 (N/d=5.4)
+split subjects: train=70 val=10 test=29
+training ensemble M = 1960
+  [SCSI] outer 0: loss=1.7105  (231s)  init prior
+   [val] outer 0: predictive log-score = -767.9024
+  [SCSI] outer 1: loss=1.6390  (52s)  bank=15680
+  [SCSI] outer 2: loss=1.5963  (56s)  bank=15680
+   [val] outer 2: predictive log-score = -761.4834
+  [SCSI] outer 3: loss=1.5566  (53s)  bank=15680
+  [SCSI] outer 4: loss=1.5200  (53s)  bank=15680
+  [SCSI] outer 5: loss=1.4895  (54s)  bank=15680
+   [val] outer 5: predictive log-score = -757.6568
+  [SCSI] outer 6: loss=1.4593  (53s)  bank=15680
+  [SCSI] outer 7: loss=1.4350  (56s)  bank=15680
+  [SCSI] outer 8: loss=1.4108  (47s)  bank=15680
+   [val] outer 8: predictive log-score = -756.4188
+  [SCSI] outer 9: loss=1.3930  (40s)  bank=15680
+  [SCSI] outer 10: loss=1.3748  (42s)  bank=15680
+  [SCSI] outer 11: loss=1.3602  (41s)  bank=15680
+  [SCSI] outer 12: loss=1.3458  (29s)  bank=15680
+   [val] outer 12: predictive log-score = -755.9425
+  [SCSI] outer 13: loss=1.3304  (28s)  bank=15680
+  [SCSI] outer 14: loss=1.3192  (42s)  bank=15680
+  [SCSI] outer 15: loss=1.3071  (40s)  bank=15680
+  [SCSI] outer 16: loss=1.2943  (40s)  bank=15680
+   [val] outer 16: predictive log-score = -755.8735
+  [SCSI] outer 17: loss=1.2866  (41s)  bank=15680
+  [SCSI] outer 18: loss=1.2731  (41s)  bank=15680
+  [SCSI] outer 19: loss=1.2671  (45s)  bank=15680
+  [SCSI] outer 20: loss=1.2598  (46s)  bank=15680
+   [val] outer 20: predictive log-score = -756.2657
+SC-SI fit: 1181s
+validation curve: {0: -767.902, 2: -761.483, 5: -757.657, 8: -756.419, 12: -755.943, 16: -755.873, 20: -756.266}  -> selected outer iteration 16
+IW baseline fitted by marginal likelihood: nu0=9.88, trace(Psi0)/(nu0-d-1)=3066.16
+
+=== held-out subjects: predictive log-score (higher is better), gain vs sample covariance ===
+Sample cov.                      logscore=-841.837 [-885.725,-794.735]  gain=+0.000 [+0.000,+0.000]   cov(50/80/95)=0.256/0.458/0.625
+Linear shrinkage (OAS)           logscore=-844.715 [-891.224,-794.283]  gain=-2.878 [-11.376,+3.647]   cov(50/80/95)=0.248/0.443/0.620
+SC-SI (ours)                     logscore=-815.622 [-860.408,-767.303]  gain=+26.215 [+21.429,+30.501]   cov(50/80/95)=0.314/0.555/0.736
+IW conjugate (ML-fitted)         logscore=-824.835 [-870.206,-775.206]  gain=+17.002 [+12.956,+21.132]   cov(50/80/95)=0.340/0.595/0.781
+Long-run proxy (reference)       logscore=-805.779 [-849.903,-758.504]  gain=+36.058 [+30.816,+41.738]   cov(50/80/95)=-
+Sample cov.                Stein loss=2.747  AIRM to long-run=1.853
+Linear shrinkage (OAS)     Stein loss=2.600  AIRM to long-run=2.371
+IW post. mean              Stein loss=1.959  AIRM to long-run=1.720
+SC-SI post. mean           Stein loss=1.678  AIRM to long-run=1.522
+SC-SI Stein-optimal        Stein loss=1.917  AIRM to long-run=1.541
+
+=== open-vs-closed Riemannian distance (reference = leave-window-out run averages) ===
+Sample cov.                  bias=+0.703 |err|=0.976
+Linear shrinkage (OAS)       bias=+0.326 |err|=0.884
+Param. bootstrap (SCM)       bias=+1.252 |err|=1.368  cov80=0.116 cov95=0.170 width80=0.78
+IW conjugate (ML-fitted)     bias=+0.726 |err|=0.969  cov80=0.192 cov95=0.300 width80=0.70
+SC-SI (ours)                 bias=+0.318 |err|=0.771  cov80=0.254 cov95=0.397 width80=0.66
+
+=== eyes-open vs eyes-closed, single 4-s window, held-out subjects ===
+SCM -> LR (plug-in)                                acc=0.820 NLL=0.431 ECE=0.051 acc@80%cov=0.867 acc@50%cov=0.899
+OAS -> LR (plug-in)                                acc=0.802 NLL=0.440 ECE=0.031 acc@80%cov=0.858 acc@50%cov=0.919
+SCM-trained LR, posterior-averaged (ours)          acc=0.847 NLL=0.385 ECE=0.053 acc@80%cov=0.895 acc@50%cov=0.943
+Posterior-trained LR, posterior-averaged (ours)    acc=0.845 NLL=0.387 ECE=0.053 acc@80%cov=0.897 acc@50%cov=0.946
+saved eeg_w4_s0_k1.0_e1.0

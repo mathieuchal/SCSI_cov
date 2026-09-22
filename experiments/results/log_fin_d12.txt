@@ -1,0 +1,88 @@
+calibrating N_eff scale on validation fold (train <1985, val 1985-1994) with the IW proxy ...
+  neff_scale=0.3: N=19 coverage={0.5: 0.48116319444444444, 0.8: 0.8135416666666667, 0.95: 0.9443576388888889}  calib_err=0.038 logscore=-20.464
+  neff_scale=0.45: N=28 coverage={0.5: 0.4270833333333333, 0.8: 0.7357638888888889, 0.95: 0.9060763888888889}  calib_err=0.181 logscore=-27.390
+  neff_scale=0.6: N=38 coverage={0.5: 0.37274305555555554, 0.8: 0.6611979166666667, 0.95: 0.8459201388888888}  calib_err=0.370 logscore=-36.921
+  neff_scale=0.8: N=50 coverage={0.5: 0.33541666666666664, 0.8: 0.5951388888888889, 0.95: 0.7888020833333333}  calib_err=0.531 logscore=-47.321
+  neff_scale=1.0: N=63 coverage={0.5: 0.3104166666666667, 0.8: 0.5547743055555555, 0.95: 0.7427951388888889}  calib_err=0.642 logscore=-57.975
+N_eff scale = 0.3  ->  N = 19 (window 63), N_forward = 6;  N/d = 1.6
+
+=== fold 0: train < 1995, test 1995-2004:  M=4656 training covariances
+    test cases: 952
+  [SCSI] outer 0: loss=9.0646  (184s)  init prior
+  [SCSI] outer 1: loss=8.1057  (63s)  bank=27936
+  [SCSI] outer 2: loss=7.9052  (62s)  bank=27936
+  [SCSI] outer 3: loss=7.7093  (60s)  bank=27936
+  [SCSI] outer 4: loss=7.5199  (60s)  bank=27936
+  [SCSI] outer 5: loss=7.3424  (54s)  bank=27936
+  [SCSI] outer 6: loss=7.1736  (36s)  bank=27936
+  [SCSI] outer 7: loss=7.0262  (38s)  bank=27936
+  [SCSI] outer 8: loss=6.8851  (36s)  bank=27936
+  [SCSI] outer 9: loss=6.7732  (54s)  bank=27936
+  [SCSI] outer 10: loss=6.6580  (55s)  bank=27936
+  [SCSI] outer 11: loss=6.5459  (47s)  bank=27936
+  [SCSI] outer 12: loss=6.4551  (55s)  bank=27936
+    sampling done (945s total)
+    fold done in 970s
+
+=== fold 1: train < 2005, test 2005-2014:  M=5296 training covariances
+    test cases: 952
+  [SCSI] outer 0: loss=9.0735  (183s)  init prior
+  [SCSI] outer 1: loss=8.1172  (58s)  bank=31776
+  [SCSI] outer 2: loss=7.9268  (61s)  bank=31776
+  [SCSI] outer 3: loss=7.7236  (56s)  bank=31776
+  [SCSI] outer 4: loss=7.5340  (57s)  bank=31776
+  [SCSI] outer 5: loss=7.3566  (58s)  bank=31776
+  [SCSI] outer 6: loss=7.1900  (60s)  bank=31776
+  [SCSI] outer 7: loss=7.0330  (63s)  bank=31776
+  [SCSI] outer 8: loss=6.8951  (67s)  bank=31776
+  [SCSI] outer 9: loss=6.7639  (61s)  bank=31776
+  [SCSI] outer 10: loss=6.6369  (50s)  bank=31776
+  [SCSI] outer 11: loss=6.5338  (61s)  bank=31776
+  [SCSI] outer 12: loss=6.4479  (56s)  bank=31776
+    sampling done (1043s total)
+    fold done in 1067s
+
+=== fold 2: train < 2015, test 2015-2026:  M=5936 training covariances
+    test cases: 1104
+  [SCSI] outer 0: loss=9.0510  (128s)  init prior
+  [SCSI] outer 1: loss=8.1161  (41s)  bank=35616
+  [SCSI] outer 2: loss=7.9169  (41s)  bank=35616
+  [SCSI] outer 3: loss=7.7143  (42s)  bank=35616
+  [SCSI] outer 4: loss=7.5243  (47s)  bank=35616
+  [SCSI] outer 5: loss=7.3415  (40s)  bank=35616
+  [SCSI] outer 6: loss=7.1723  (40s)  bank=35616
+  [SCSI] outer 7: loss=7.0190  (42s)  bank=35616
+  [SCSI] outer 8: loss=6.8918  (42s)  bank=35616
+  [SCSI] outer 9: loss=6.7502  (39s)  bank=35616
+  [SCSI] outer 10: loss=6.6219  (39s)  bank=35616
+  [SCSI] outer 11: loss=6.5202  (39s)  bank=35616
+  [SCSI] outer 12: loss=6.4136  (39s)  bank=35616
+    sampling done (742s total)
+    fold done in 762s
+
+=== out-of-sample min-variance portfolio (unconstrained), 21-day realised variance ===
+SCM                      ann.vol=14.796   mean log(var/var_OAS)=+0.0927 [+0.0730,+0.1124]   median fwd Stein=8.528
+OAS shrinkage            ann.vol=14.338   mean log(var/var_OAS)=+0.0000 [+0.0000,+0.0000]   median fwd Stein=8.385
+PCA K=1                  ann.vol=15.861   mean log(var/var_OAS)=+0.2084 [+0.1862,+0.2302]   median fwd Stein=9.978
+PCA K=3                  ann.vol=14.796   mean log(var/var_OAS)=+0.0936 [+0.0752,+0.1105]   median fwd Stein=8.424
+PCA K=GD (plug-in)       ann.vol=14.985   mean log(var/var_OAS)=+0.1178 [+0.0999,+0.1362]   median fwd Stein=8.967
+PCA K=Bayes (SC-SI)      ann.vol=14.794   mean log(var/var_OAS)=+0.0900 [+0.0718,+0.1084]   median fwd Stein=8.677
+PCA K=Bayes (IW)         ann.vol=15.028   mean log(var/var_OAS)=+0.1191 [+0.0998,+0.1368]   median fwd Stein=8.741
+IW post. mean            ann.vol=14.397   mean log(var/var_OAS)=+0.0074 [+0.0007,+0.0145]   median fwd Stein=8.223
+SC-SI post. mean         ann.vol=14.132   mean log(var/var_OAS)=-0.0310 [-0.0390,-0.0234]   median fwd Stein=7.938
+SC-SI Stein-opt.         ann.vol=14.279   mean log(var/var_OAS)=-0.0253 [-0.0326,-0.0176]   median fwd Stein=7.569
+
+K selected: GD mean=1.54 (|dK|/month=0.22) ; Bayes(SC-SI) mean=2.19 (|dK|/month=0.52) ; Bayes(IW) mean=2.96
+
+=== predictive log-score of the forward 21-day covariance (vs SCM plug-in) ===
+SCM              gain vs SCM = +0.000 [+0.000,+0.000]
+OAS shrinkage    gain vs SCM = +3.198 [+2.054,+4.630]
+IW               gain vs SCM = +0.955 [+0.062,+1.992]
+SC-SI            gain vs SCM = +3.704 [+2.637,+5.009]
+
+=== calibration of forward directional variances (asset axes + equal weight) ===
+OAS shrinkage    coverage 50/80/95 = 0.472/0.766/0.909
+IW               coverage 50/80/95 = 0.505/0.805/0.939
+SC-SI            coverage 50/80/95 = 0.523/0.822/0.944
+SCM              coverage 50/80/95 = 0.484/0.769/0.909
+saved fin_d12_nw63_s0

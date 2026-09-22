@@ -1,0 +1,18 @@
+  [SCSI] outer 0: loss=1.9342  (261s)  init prior
+   [val] outer 0: predictive log-score = -137.678
+  [SCSI] outer 1: loss=1.8835  (43s)  bank=16000
+  [SCSI] outer 2: loss=1.8641  (63s)  bank=16000
+   [val] outer 2: predictive log-score = -136.948
+  [SCSI] outer 3: loss=1.8495  (64s)  bank=16000
+  [SCSI] outer 4: loss=1.8409  (58s)  bank=16000
+   [val] outer 4: predictive log-score = -136.470
+  [SCSI] outer 5: loss=1.8269  (64s)  bank=16000
+  [SCSI] outer 6: loss=1.8158  (68s)  bank=16000
+   [val] outer 6: predictive log-score = -136.465
+  [SCSI] outer 7: loss=1.8037  (65s)  bank=16000
+  [SCSI] outer 8: loss=1.7965  (61s)  bank=16000
+   [val] outer 8: predictive log-score = -136.548
+  [SCSI] outer 9: loss=1.7870  (62s)  bank=16000
+  [SCSI] outer 10: loss=1.7806  (62s)  bank=16000
+   [val] outer 10: predictive log-score = -136.437
+iw_ri_d8: selected outer iteration 10  (val curve {0: -137.67796860704277, 2: -136.94785521242218, 4: -136.4703695633327, 6: -136.46454891596733, 8: -136.5478179100333, 10: -136.43684283248442})  fit 953s

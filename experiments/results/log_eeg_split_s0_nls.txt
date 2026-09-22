@@ -1,0 +1,45 @@
+N=28 d=8; test subjects=29; SC-SI checkpoint k=12
+Sample cov.                  logscore=-532.05 gain=+0.00 [+0.00,+0.00]  dir-cov(50/80/95)=0.383/0.647/0.834
+Linear shrinkage (OAS)       logscore=-548.09 gain=-16.04 [-22.38,-10.78]  dir-cov(50/80/95)=0.362/0.628/0.818
+Nonlinear shrinkage (LW)     logscore=-529.30 gain=+2.75 [+2.16,+3.36]  dir-cov(50/80/95)=0.378/0.648/0.834
+IW conjugate (ML-fitted)     logscore=-531.92 gain=+0.13 [-1.81,+1.75]  dir-cov(50/80/95)=0.464/0.761/0.922
+SC-SI (ours)                 logscore=-526.30 gain=+5.75 [+4.15,+7.07]  dir-cov(50/80/95)=0.480/0.764/0.917
+paired log-score  SC-SI (ours) - Nonlinear shrinkage (LW): +2.99 [+1.54,+4.05]
+paired log-score  SC-SI (ours) - IW conjugate (ML-fitted): +5.62 [+4.10,+7.17]
+paired log-score  Nonlinear shrinkage (LW) - Sample cov.: +2.75 [+2.16,+3.36]
+
+log det C: coverage 50/80/95 by method
+   Sample cov.                  0.187/0.342/0.530   KS=0.526
+   Linear shrinkage (OAS)       0.078/0.166/0.264   KS=0.723
+   Nonlinear shrinkage (LW)     0.219/0.462/0.663   KS=0.384
+   IW conjugate (ML-fitted)     0.232/0.427/0.628   KS=0.298
+   SC-SI (ours)                 0.389/0.675/0.857   KS=0.098
+
+log C[Oz,Oz]: coverage 50/80/95 by method
+   Sample cov.                  0.382/0.655/0.846   KS=0.108
+   Linear shrinkage (OAS)       0.381/0.643/0.823   KS=0.117
+   Nonlinear shrinkage (LW)     0.372/0.656/0.842   KS=0.083
+   IW conjugate (ML-fitted)     0.441/0.738/0.909   KS=0.129
+   SC-SI (ours)                 0.485/0.765/0.906   KS=0.054
+
+top-eigenvalue share: coverage 50/80/95 by method
+   Sample cov.                  0.406/0.723/0.885   KS=0.120
+   Linear shrinkage (OAS)       0.335/0.555/0.739   KS=0.344
+   Nonlinear shrinkage (LW)     0.390/0.690/0.858   KS=0.138
+   IW conjugate (ML-fitted)     0.521/0.819/0.953   KS=0.130
+   SC-SI (ours)                 0.457/0.812/0.948   KS=0.044
+
+log cond. number: coverage 50/80/95 by method
+   Sample cov.                  0.284/0.530/0.740   KS=0.423
+   Linear shrinkage (OAS)       0.059/0.138/0.273   KS=0.763
+   Nonlinear shrinkage (LW)     0.374/0.667/0.855   KS=0.255
+   IW conjugate (ML-fitted)     0.296/0.562/0.775   KS=0.328
+   SC-SI (ours)                 0.505/0.800/0.950   KS=0.079
+
+open-vs-closed Riemannian distance: posterior predictive of the held-out half
+   Sample cov.                  cov 50/80/95 = 0.113/0.249/0.404   plug-in distance bias vs held-out half = +0.000
+   Linear shrinkage (OAS)       cov 50/80/95 = 0.207/0.394/0.581   plug-in distance bias vs held-out half = -0.404
+   Nonlinear shrinkage (LW)     cov 50/80/95 = 0.197/0.379/0.549   plug-in distance bias vs held-out half = -0.321
+   IW conjugate (ML-fitted)     cov 50/80/95 = 0.209/0.360/0.473   plug-in distance bias vs held-out half = -0.019
+   SC-SI (ours)                 cov 50/80/95 = 0.227/0.429/0.655   plug-in distance bias vs held-out half = -0.289
+saved

@@ -1,0 +1,25 @@
+  [SCSI] outer 0: loss=2.4835  (131s)  init prior
+   iter 0: e_M=0.229 e_Omega=0.861 e_M_SCM=0.430 pit_ks=0.177 pit_cov50=0.332 pit_cov80=0.581 pit_cov95=0.771 logdet_mean_err=0.804 logdet_sd_ratio=1.435 chol_diag_ks=0.250 chol_off_ks=0.159
+  [SCSI] outer 1: loss=2.3708  (76s)  bank=40000
+   iter 1: e_M=0.165 e_Omega=0.552 e_M_SCM=0.433 pit_ks=0.121 pit_cov50=0.371 pit_cov80=0.637 pit_cov95=0.824 logdet_mean_err=0.505 logdet_sd_ratio=1.370 chol_diag_ks=0.175 chol_off_ks=0.124
+  [SCSI] outer 2: loss=2.3034  (76s)  bank=40000
+  [SCSI] outer 3: loss=2.2383  (76s)  bank=40000
+   iter 3: e_M=0.115 e_Omega=0.341 e_M_SCM=0.423 pit_ks=0.084 pit_cov50=0.407 pit_cov80=0.685 pit_cov95=0.867 logdet_mean_err=0.329 logdet_sd_ratio=1.287 chol_diag_ks=0.125 chol_off_ks=0.091
+  [SCSI] outer 4: loss=2.1957  (76s)  bank=40000
+  [SCSI] outer 5: loss=2.1643  (77s)  bank=40000
+  [SCSI] outer 6: loss=2.1207  (77s)  bank=40000
+   iter 6: e_M=0.077 e_Omega=0.214 e_M_SCM=0.435 pit_ks=0.058 pit_cov50=0.439 pit_cov80=0.726 pit_cov95=0.900 logdet_mean_err=0.215 logdet_sd_ratio=1.202 chol_diag_ks=0.087 chol_off_ks=0.065
+fit time 600s
+FINAL {
+ "e_M": 0.07091210036223805,
+ "e_Omega": 0.20511448283413877,
+ "e_M_SCM": 0.4073259073801464,
+ "pit_ks": 0.05467048468393261,
+ "pit_cov50": 0.4365109530362216,
+ "pit_cov80": 0.7255346124822443,
+ "pit_cov95": 0.898773193359375,
+ "logdet_mean_err": 0.19982907735739028,
+ "logdet_sd_ratio": 1.1971570048306797,
+ "chol_diag_ks": 0.08002863247077988,
+ "chol_off_ks": 0.05868974253410253
+}

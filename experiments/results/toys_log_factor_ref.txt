@@ -1,0 +1,2 @@
+reference (HMC): torch.Size([128, 2048, 8, 8])  diag={'acc': 0.7494297027587891, 'eps_median': 0.10293496070814633, 'n_chains': 8, 'n_keep': 256, 'sec': 874.3646700382233}
+  R-hat (max over test obs): {'logdet': 1.012, 'logcond': 1.012, 'top_share': 1.003, 'ldv_top': 1.003, 'ldv_bot': 1.018, 'corr01': 1.006}

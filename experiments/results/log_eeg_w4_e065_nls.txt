@@ -1,0 +1,36 @@
+subjects=109 windows/run=14 d=8  samples/window=640  N_eff/n=0.0673 -> N=28 (N/d=3.5)
+split subjects: train=70 val=10 test=29
+training ensemble M = 1960
+loaded cached checkpoints
+validation curve: {0: -501.805, 2: -496.712, 5: -494.052, 8: -493.509, 12: -492.449}  -> selected outer iteration 12
+IW baseline fitted by marginal likelihood: nu0=10.89, trace(Psi0)/(nu0-d-1)=1838.71
+
+=== held-out subjects: predictive log-score (higher is better), gain vs sample covariance ===
+Sample cov.                      logscore=-548.173 [-576.751,-517.502]  gain=+0.000 [+0.000,+0.000]   cov(50/80/95)=0.308/0.541/0.717
+Linear shrinkage (OAS)           logscore=-556.115 [-586.525,-522.944]  gain=-7.942 [-14.798,-2.688]   cov(50/80/95)=0.298/0.526/0.704
+Nonlinear shrinkage (LW)         logscore=-539.602 [-568.267,-508.902]  gain=+8.571 [+7.094,+10.009]   cov(50/80/95)=0.309/0.545/0.719
+SC-SI (ours)                     logscore=-531.639 [-560.659,-500.410]  gain=+16.534 [+13.365,+19.508]   cov(50/80/95)=0.382/0.651/0.828
+IW conjugate (ML-fitted)         logscore=-539.255 [-568.648,-507.133]  gain=+8.918 [+5.785,+11.836]   cov(50/80/95)=0.396/0.664/0.847
+Long-run proxy (reference)       logscore=-524.693 [-553.425,-493.910]  gain=+23.480 [+20.066,+27.178]   cov(50/80/95)=-
+Sample cov.                Stein loss=2.747  AIRM to long-run=1.853
+Linear shrinkage (OAS)     Stein loss=2.988  AIRM to long-run=2.693
+Nonlinear shrinkage (LW)   Stein loss=1.926  AIRM to long-run=1.787
+IW post. mean              Stein loss=1.802  AIRM to long-run=1.754
+SC-SI post. mean           Stein loss=1.552  AIRM to long-run=1.526
+SC-SI Stein-optimal        Stein loss=1.812  AIRM to long-run=1.515
+
+=== open-vs-closed Riemannian distance (reference = leave-window-out run averages) ===
+Sample cov.                  bias=+0.703 |err|=0.976
+Linear shrinkage (OAS)       bias=+0.269 |err|=0.898
+Nonlinear shrinkage (LW)     bias=+0.367 |err|=0.805
+Param. bootstrap (SCM)       bias=+1.577 |err|=1.648  cov80=0.076 cov95=0.138 width80=1.00
+IW conjugate (ML-fitted)     bias=+0.654 |err|=0.933  cov80=0.273 cov95=0.394 width80=0.82
+SC-SI (ours)                 bias=+0.370 |err|=0.782  cov80=0.296 cov95=0.463 width80=0.83
+
+=== eyes-open vs eyes-closed, single 4-s window, held-out subjects ===
+SCM -> LR (plug-in)                                acc=0.820 NLL=0.431 ECE=0.051 acc@80%cov=0.867 acc@50%cov=0.899
+OAS -> LR (plug-in)                                acc=0.781 NLL=0.465 ECE=0.045 acc@80%cov=0.835 acc@50%cov=0.904
+NLS -> LR (plug-in)                                acc=0.809 NLL=0.426 ECE=0.029 acc@80%cov=0.871 acc@50%cov=0.914
+SCM-trained LR, posterior-averaged (ours)          acc=0.847 NLL=0.390 ECE=0.062 acc@80%cov=0.895 acc@50%cov=0.946
+Posterior-trained LR, posterior-averaged (ours)    acc=0.842 NLL=0.391 ECE=0.063 acc@80%cov=0.901 acc@50%cov=0.946
+saved eeg_w4_s0_k1.0_e0.65
