@@ -20,7 +20,7 @@ LABELS = {"logdet": "log det C", "logcond": "log condition number", "top_share":
 
 
 def make_testset(toy, n=128, seed=777):
-    g = torch.Generator().manual_seed(seed)
+    g = torch.Generator(device=toy.device).manual_seed(seed)
     C = toy.sample_prior(n, g)
     Ce = wishart_channel(C, toy.N, g)
     return C, Ce
@@ -45,9 +45,9 @@ def rhat(x):                                   # x: (M, nchain, nkeep)
 
 def get_reference(toy, Ce, n_ref, cache):
     if os.path.exists(cache):
-        z = torch.load(cache)
-        return z["Cs"].to(DT), z.get("diag", {})
-    g = torch.Generator().manual_seed(4242)
+        z = torch.load(cache, map_location="cpu")
+        return z["Cs"].to(DT).to(toy.device), z.get("diag", {})
+    g = torch.Generator(device=toy.device).manual_seed(4242)
     t0 = time.time()
     diag = {}
     if toy.exact:
@@ -58,17 +58,18 @@ def get_reference(toy, Ce, n_ref, cache):
         S = stats_of(Cs, Ce)
         diag["rhat"] = {k: dict(max=float(rhat(v.reshape(v.shape[0], n_chains, -1)).max()), median=float(rhat(v.reshape(v.shape[0], n_chains, -1)).median()))
                         for k, v in S.items()}
-        idx = torch.randperm(Cs.shape[1], generator=g); Cs = Cs[:, idx]                    # mix chains (RHS metrics already computed)
+        idx = torch.randperm(Cs.shape[1], device=toy.device, generator=g); Cs = Cs[:, idx]  # mix chains (RHS metrics already computed)
     diag["sec"] = time.time() - t0
-    torch.save({"Cs": Cs.float(), "diag": diag}, cache)
+    torch.save({"Cs": Cs.float().cpu(), "diag": diag}, cache)   # cached on CPU so it loads on any device later
     return Cs, diag
 
 
-def load_scsi(toy, path, threads=2):
-    z = torch.load(path)
-    cfg = SCSIConfig(N=toy.N, d=toy.d, kappa=1.0, threads=threads)
+def load_scsi(toy, path, threads=2, device=None):
+    device = device or toy.device
+    z = torch.load(path, map_location="cpu")
+    cfg = SCSIConfig(N=toy.N, d=toy.d, kappa=1.0, threads=threads, device=str(device))
     m = SCSI(cfg)
-    m.ema_net = Drift(Sym(toy.d).p, z["mu"], z["sd"], cfg.hidden, cfg.depth)
+    m.ema_net = Drift(Sym(toy.d).p, z["mu"], z["sd"], cfg.hidden, cfg.depth).to(device)
     m.ema_net.load_state_dict(z["state"])
     return m, z["k"]
 
@@ -97,9 +98,11 @@ if __name__ == "__main__":
     ap.add_argument("--J", type=int, default=1024)
     ap.add_argument("--threads", type=int, default=2)
     ap.add_argument("--ref_only", action="store_true")
+    ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     a = ap.parse_args()
     torch.set_num_threads(a.threads)
-    toy = make_toy(a.toy)
+    dev = torch.device(a.device)
+    toy = make_toy(a.toy, device=dev)
     os.makedirs("results/toys", exist_ok=True)
     C_true, Ce = make_testset(toy, a.n_test)
     ref_C, ref_diag = get_reference(toy, Ce, a.n_ref, f"results/toys/{toy.name}_ref.pt")
@@ -109,18 +112,18 @@ if __name__ == "__main__":
     if a.ref_only:
         raise SystemExit
     # ---- learners ---- #
-    model, kbest = load_scsi(toy, f"results/toys/{toy.name}_model.pt", a.threads)
-    g = torch.Generator().manual_seed(99)
+    model, kbest = load_scsi(toy, f"results/toys/{toy.name}_model.pt", a.threads, device=dev)
+    g = torch.Generator(device=dev).manual_seed(99)
     Cs_si = model.sample_posterior(Ce, a.J, gen=g)
-    gg = torch.Generator().manual_seed(1000)                                             # same training ensemble as toy_train.py
+    gg = torch.Generator(device=dev).manual_seed(1000)                                   # same training ensemble as toy_train.py
     Ce_tr = wishart_channel(toy.sample_prior(toy.M, gg), toy.N, gg)
     iw = IWPrior(Ce_tr, toy.N, iters=800)
     Cs_iw = iw.sample_posterior(Ce, a.J, gen=g)
     print(f"SC-SI checkpoint k={kbest};  IW-ML fit nu0={iw.nu0:.2f}")
     S = {"ref": stats_of(ref_C, Ce), "scsi": stats_of(Cs_si, Ce), "iwfit": stats_of(Cs_iw, Ce)}
     T = stats_of(C_true[:, None], Ce); SCM = stats_of(Ce[:, None], Ce)
-    S = {k: {s: v.numpy() for s, v in d_.items()} for k, d_ in S.items()}
-    T = {s: v[:, 0].numpy() for s, v in T.items()}; SCM = {s: v[:, 0].numpy() for s, v in SCM.items()}
+    S = {k: {s: v.cpu().numpy() for s, v in d_.items()} for k, d_ in S.items()}
+    T = {s: v[:, 0].cpu().numpy() for s, v in T.items()}; SCM = {s: v[:, 0].cpu().numpy() for s, v in SCM.items()}
     R = a.n_ref // 2
     metrics = {}
     for s in STATS:

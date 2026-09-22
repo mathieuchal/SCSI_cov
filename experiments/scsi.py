@@ -13,6 +13,12 @@ Prior and Posterior Learning" (general, matrix-logarithm version):
 
 Everything is batched torch; the SDE lives in raw svec(log) coordinates, the network
 only sees standardised copies of them.
+
+Device: SCSIConfig.device selects 'cpu' or 'cuda' (or a specific 'cuda:N'). Every tensor the
+class allocates internally follows that device, and `fit`/`fit_supervised` move whatever the
+caller hands them onto it. A `gen`/`self.gen` torch.Generator must live on the same device as
+the tensors it's used with (torch itself enforces this) -- SCSI's own generator is created on
+`cfg.device`; a generator you pass in explicitly (e.g. to `sample_posterior`) must match too.
 """
 from __future__ import annotations
 
@@ -34,10 +40,11 @@ DT = torch.float64  # dtype for matrix functions / simulation
 class Sym:
     """svec / logm helpers for a fixed dimension d."""
 
-    def __init__(self, d: int):
+    def __init__(self, d: int, device="cpu"):
         self.d = d
         self.p = d * (d + 1) // 2
-        iu = torch.triu_indices(d, d)
+        self.device = torch.device(device)
+        iu = torch.triu_indices(d, d, device=self.device)
         self.i0, self.i1 = iu[0], iu[1]
         self.scale = torch.where(self.i0 == self.i1, 1.0, math.sqrt(2.0)).to(DT)
 
@@ -46,7 +53,7 @@ class Sym:
 
     def svec_inv(self, y: torch.Tensor) -> torch.Tensor:
         y = y / self.scale.to(y.dtype)
-        A = torch.zeros(*y.shape[:-1], self.d, self.d, dtype=y.dtype)
+        A = torch.zeros(*y.shape[:-1], self.d, self.d, dtype=y.dtype, device=y.device)
         A[..., self.i0, self.i1] = y
         A[..., self.i1, self.i0] = y
         return A
@@ -65,7 +72,7 @@ class Sym:
         """Phi(C) = svec(log(C + eps0 I)); eps0 > 0 only needed when N < d."""
         C = C.to(DT)
         if eps0 > 0:
-            C = C + eps0 * torch.eye(self.d, dtype=DT)
+            C = C + eps0 * torch.eye(self.d, dtype=DT, device=C.device)
         return self.svec(self.logm(C))
 
     def decode(self, Y: torch.Tensor) -> torch.Tensor:
@@ -73,10 +80,13 @@ class Sym:
 
 
 def wishart_channel(C: torch.Tensor, N: int, gen: torch.Generator | None = None) -> torch.Tensor:
-    """Ce = (1/N) L Z Z^T L^T with C = L L^T  ~  K_N(. | C)   (same law as eq. 2)."""
+    """Ce = (1/N) L Z Z^T L^T with C = L L^T  ~  K_N(. | C)   (same law as eq. 2).
+
+    gen, if given, must be a torch.Generator on the same device as C."""
     d = C.shape[-1]
-    L = torch.linalg.cholesky(C.to(DT))
-    Z = torch.randn(*C.shape[:-2], d, N, dtype=DT, generator=gen)
+    C = C.to(DT)
+    L = torch.linalg.cholesky(C)
+    Z = torch.randn(*C.shape[:-2], d, N, dtype=DT, device=C.device, generator=gen)
     X = L @ Z
     return X @ X.transpose(-1, -2) / N
 
@@ -143,6 +153,7 @@ class SCSIConfig:
     pool_init: int = 200_000    # size of the pool drawn from the initial prior / supervised prior
     threads: int = 4
     init: str = "raw"          # 'raw' | 'deconv'
+    device: str = "cpu"         # 'cpu' | 'cuda' | 'cuda:N'
     verbose: bool = True
 
 
@@ -151,10 +162,13 @@ class SCSI:
 
     def __init__(self, cfg: SCSIConfig):
         self.cfg = cfg
-        self.S = Sym(cfg.d)
+        self.device = torch.device(cfg.device)
+        self.S = Sym(cfg.d, device=self.device)
         self.sigma = cfg.kappa * math.sqrt(2.0 / cfg.N)
-        self.gen = torch.Generator().manual_seed(cfg.seed)
+        self.gen = torch.Generator(device=self.device).manual_seed(cfg.seed)
         torch.manual_seed(cfg.seed)
+        if self.device.type == "cuda":
+            torch.cuda.manual_seed_all(cfg.seed)
         torch.set_num_threads(cfg.threads)
         self.net: Drift | None = None
         self.ema_net: Drift | None = None
@@ -183,11 +197,11 @@ class SCSI:
             w, V = torch.linalg.eigh(cov - noise_cov)
             w_floor = 0.05 * torch.linalg.eigvalsh(cov)[-1] * 0 + 0.05 * w.abs().max()
             cov = (V * w.clamp_min(w_floor)) @ V.T
-        cov = cov * cfg.log_prior_inflate + 1e-6 * torch.eye(Ye.shape[1], dtype=DT) * cov.diag().mean()
+        cov = cov * cfg.log_prior_inflate + 1e-6 * torch.eye(Ye.shape[1], dtype=DT, device=self.device) * cov.diag().mean()
         self._init_m, self._init_L = m, torch.linalg.cholesky(cov)
 
     def _sample_init_prior(self, n: int) -> torch.Tensor:
-        z = torch.randn(n, self.S.p, dtype=DT, generator=self.gen)
+        z = torch.randn(n, self.S.p, dtype=DT, device=self.device, generator=self.gen)
         return self._init_m + z @ self._init_L.T
 
     def _pool_sampler(self, pool):
@@ -195,7 +209,7 @@ class SCSI:
         n = Yp.shape[0]
 
         def f(B):
-            idx = torch.randint(0, n, (B,), generator=self.gen)
+            idx = torch.randint(0, n, (B,), device=self.device, generator=self.gen)
             return Yp[idx], Cp[idx]
         return f
 
@@ -212,8 +226,8 @@ class SCSI:
             Y, C = target_sampler(cfg.batch)                                 # clean targets (B,p), (B,d,d)
             Ce = wishart_channel(C, cfg.N, self.gen)
             Yp = S.encode(Ce, cfg.eps0)                                      # Y'_e
-            t = torch.rand(cfg.batch, 1, dtype=DT, generator=self.gen)
-            z = torch.randn(cfg.batch, S.p, dtype=DT, generator=self.gen)
+            t = torch.rand(cfg.batch, 1, dtype=DT, device=self.device, generator=self.gen)
+            z = torch.randn(cfg.batch, S.p, dtype=DT, device=self.device, generator=self.gen)
             W = torch.sqrt(t) * z
             I = (1 - t) * Yp + t * Y + self.sigma * (1 - t) * W
             R = Y - Yp - self.sigma * W
@@ -234,10 +248,13 @@ class SCSI:
     @torch.no_grad()
     def sample_posterior(self, Ce: torch.Tensor, n_draws: int = 1, net: Drift | None = None,
                          n_steps: int | None = None, chunk: int = 20000, gen=None) -> torch.Tensor:
-        """Ce: (M,d,d) observations -> C draws (M,n_draws,d,d)."""
+        """Ce: (M,d,d) observations -> C draws (M,n_draws,d,d).
+
+        Ce is moved to self.device automatically; a `gen` passed in must already live there."""
         cfg, S = self.cfg, self.S
         net = net or self.ema_net
         gen = gen or self.gen
+        Ce = Ce.to(self.device)
         J = n_steps or cfg.n_sde_steps
         Ye = S.encode(Ce, cfg.eps0)                                          # (M,p)
         M = Ye.shape[0]
@@ -249,11 +266,11 @@ class SCSI:
             dt = 1.0 / J
             for j in range(J):
                 t = j * dt
-                tt = torch.full((y.shape[0], 1), t)
+                tt = torch.full((y.shape[0], 1), t, device=self.device)
                 b = net(tt, y.float(), ye.float()).to(DT)
                 drift = (1 + t) * b - y + ye
                 g = self.sigma * math.sqrt(max(1 - t * t, 0.0))
-                y = y + drift * dt + g * math.sqrt(dt) * torch.randn(y.shape, dtype=DT, generator=gen)
+                y = y + drift * dt + g * math.sqrt(dt) * torch.randn(y.shape, dtype=DT, device=self.device, generator=gen)
             out.append(y)
         Y1 = torch.cat(out)
         C = S.decode(Y1)
@@ -261,17 +278,17 @@ class SCSI:
 
     # ---- Algorithm 1 ---- #
     def fit(self, Ce_obs: torch.Tensor, callback=None):
-        """Ce_obs: (M,d,d) recorded empirical covariances (float64)."""
+        """Ce_obs: (M,d,d) recorded empirical covariances; moved to self.device automatically."""
         cfg, S = self.cfg, self.S
-        Ce_obs = Ce_obs.to(DT)
+        Ce_obs = Ce_obs.to(DT).to(self.device)
         M = Ce_obs.shape[0]
         Ye = S.encode(Ce_obs, cfg.eps0)
         self._fit_init_prior(Ye)
         # normalisation stats for the network (fixed for the whole run)
         mu = Ye.mean(0)
         sd = Ye.std(0).clamp_min(1e-3)
-        self.net = Drift(S.p, mu, sd, cfg.hidden, cfg.depth)
-        self.ema_net = Drift(S.p, mu, sd, cfg.hidden, cfg.depth)
+        self.net = Drift(S.p, mu, sd, cfg.hidden, cfg.depth).to(self.device)
+        self.ema_net = Drift(S.p, mu, sd, cfg.hidden, cfg.depth).to(self.device)
         self.ema_net.load_state_dict(self.net.state_dict())
         for q in self.ema_net.parameters():
             q.requires_grad_(False)
@@ -305,14 +322,15 @@ class SCSI:
     # ---- supervised control: train on true (C, Ce) pairs, for diagnostics only ---- #
     def fit_supervised(self, C_true_sampler, Ce_ref: torch.Tensor, steps: int | None = None):
         cfg, S = self.cfg, self.S
-        Ye = S.encode(Ce_ref.to(DT), cfg.eps0)
+        Ce_ref = Ce_ref.to(DT).to(self.device)
+        Ye = S.encode(Ce_ref, cfg.eps0)
         mu, sd = Ye.mean(0), Ye.std(0).clamp_min(1e-3)
-        self.net = Drift(S.p, mu, sd, cfg.hidden, cfg.depth)
-        self.ema_net = Drift(S.p, mu, sd, cfg.hidden, cfg.depth)
+        self.net = Drift(S.p, mu, sd, cfg.hidden, cfg.depth).to(self.device)
+        self.ema_net = Drift(S.p, mu, sd, cfg.hidden, cfg.depth).to(self.device)
         self.ema_net.load_state_dict(self.net.state_dict())
         for q in self.ema_net.parameters():
             q.requires_grad_(False)
-        Cp = C_true_sampler(cfg.pool_init)
+        Cp = C_true_sampler(cfg.pool_init).to(self.device)
         loss, dt = self._fit(self._pool_sampler((S.encode(Cp), Cp)), steps or cfg.steps_first, cfg.lr, cfg.lr_end)
         self._log(0, loss, dt, note="supervised")
         return self

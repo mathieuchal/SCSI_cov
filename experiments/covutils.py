@@ -13,15 +13,18 @@ from scsi import DT, wishart_channel
 # inverse-Wishart machinery (Bartlett sampler, conjugate posterior, marginal likelihood)
 # ----------------------------------------------------------------------------------------------- #
 def sample_iw(nu, Psi, size, gen=None):
-    """C ~ IW_d(nu, Psi) (paper's convention, eq. 132); Psi may be (d,d) or (size,d,d)."""
+    """C ~ IW_d(nu, Psi) (paper's convention, eq. 132); Psi may be (d,d) or (size,d,d).
+
+    Runs on Psi's device; gen, if given, must be a torch.Generator on that same device."""
     Psi = Psi.to(DT)
     d = Psi.shape[-1]
+    dev = Psi.device
     LB = torch.linalg.cholesky(Psi)
-    T = torch.zeros(size, d, d, dtype=DT)
+    T = torch.zeros(size, d, d, dtype=DT, device=dev)
     for i in range(d):
-        T[:, i, i] = torch.sqrt(torch._standard_gamma(torch.full((size,), (nu - i) / 2.0, dtype=DT), generator=gen) * 2.0)
+        T[:, i, i] = torch.sqrt(torch._standard_gamma(torch.full((size,), (nu - i) / 2.0, dtype=DT, device=dev), generator=gen) * 2.0)
         for j in range(i):
-            T[:, i, j] = torch.randn(size, dtype=DT, generator=gen)
+            T[:, i, j] = torch.randn(size, dtype=DT, device=dev, generator=gen)
     LBt = LB.transpose(-1, -2)
     if LBt.dim() == 2:
         LBt = LBt.expand(size, d, d)
@@ -52,17 +55,18 @@ class IWPrior:
         d = Ce.shape[-1]
         self.N, self.d = N, d
         Ce = Ce.to(DT)
+        dev = Ce.device
         m = Ce.mean(0)
         L0 = torch.linalg.cholesky(m * 10.0)
-        raw = torch.tensor(L0.numpy()[np.tril_indices(d)], dtype=DT).clone().requires_grad_(True)
-        a = torch.tensor(math.log(10.0), dtype=DT, requires_grad=True)   # nu0 = d + 1 + exp(a) ... (kappa0)
-        tri = torch.tril_indices(d, d)
+        tri = torch.tril_indices(d, d, device=dev)
+        raw = L0[tri[0], tri[1]].clone().detach().requires_grad_(True)   # device-preserving (no numpy round-trip)
+        a = torch.tensor(math.log(10.0), dtype=DT, device=dev, requires_grad=True)   # nu0 = d + 1 + exp(a) ... (kappa0)
 
         def build(raw, a):
-            L = torch.zeros(d, d, dtype=DT)
+            L = torch.zeros(d, d, dtype=DT, device=dev)
             L[tri[0], tri[1]] = raw
             L = L - torch.diag(torch.diag(L)) + torch.diag(torch.exp(torch.log(torch.diag(L).abs() + 1e-12)))
-            return L @ L.T + 1e-9 * torch.eye(d, dtype=DT), d + 1 + torch.exp(a)
+            return L @ L.T + 1e-9 * torch.eye(d, dtype=DT, device=dev), d + 1 + torch.exp(a)
 
         opt = torch.optim.Adam([raw, a], lr=0.05)
         for _ in range(iters):
@@ -98,7 +102,7 @@ def oas_shrink(Ce, N):
     den = (N + 1 - 2.0 / d) * (tr2 - tr ** 2 / d)
     rho = (num / den).clamp(0, 1)
     mu = tr / d
-    I = torch.eye(d, dtype=Ce.dtype)
+    I = torch.eye(d, dtype=Ce.dtype, device=Ce.device)
     return (1 - rho)[..., None, None] * Ce + (rho * mu)[..., None, None] * I
 
 
