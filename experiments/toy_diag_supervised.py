@@ -31,11 +31,13 @@ ap.add_argument("--n_ref", type=int, default=2048)
 ap.add_argument("--J", type=int, default=1024)
 ap.add_argument("--seed", type=int, default=2024)
 ap.add_argument("--activation", default="silu", choices=["silu", "relu", "gelu", "tanh"])
+ap.add_argument("--hidden", type=int, default=256)
+ap.add_argument("--depth", type=int, default=4)
 a = ap.parse_args()
 torch.set_num_threads(a.threads)
 dev = torch.device(a.device)
 toy = make_toy(a.toy, device=dev)
-print(f"toy={a.toy} device={dev} d={toy.d} N={toy.N} M={toy.M} activation={a.activation}", flush=True)
+print(f"toy={a.toy} device={dev} d={toy.d} N={toy.N} M={toy.M} activation={a.activation} hidden={a.hidden} depth={a.depth}", flush=True)
 
 # same test set / reference as toy_eval.py (same seed, so directly comparable to the self-consistent run)
 C_true, Ce = make_testset(toy, a.n_test)
@@ -62,7 +64,7 @@ for steps in [int(x) for x in a.steps.split(",")]:
     print(f"\n=== supervised control, {steps} gradient steps (fresh network, fresh {200_000}-covariance pool of TRUE draws) ===", flush=True)
     gen = torch.Generator(device=dev).manual_seed(a.seed)
     cfg = SCSIConfig(N=toy.N, d=toy.d, kappa=1.0, threads=a.threads, device=str(dev), seed=a.seed, pool_init=200_000,
-                     activation=a.activation)
+                     activation=a.activation, hidden=a.hidden, depth=a.depth)
     model = SCSI(cfg)
 
     def sampler(n, gen=gen):
@@ -71,6 +73,9 @@ for steps in [int(x) for x in a.steps.split(",")]:
     Ce_norm = wishart_channel(toy.sample_prior(2000, gen), toy.N, gen)   # only used to set the network's input normalisation
     t0 = time.time()
     model.fit_supervised(sampler, Ce_norm, steps=steps)
+    if steps == [int(x) for x in a.steps.split(",")][0]:
+        nparam = sum(p.numel() for p in model.net.parameters())
+        print(f"  net: hidden={a.hidden} depth={a.depth} activation={a.activation} -> {nparam:,} parameters", flush=True)
     row = evaluate(model, torch.Generator(device=dev).manual_seed(99))
     results[steps] = row
     print(f"  ({time.time()-t0:.0f}s)  " + "  ".join(f"{s}: W1={row[s]['w1']:.2f}(bias{row[s]['bias_z']:+.2f},PITks={row[s]['pit_ks']:.2f})" for s in STATS), flush=True)
@@ -79,7 +84,11 @@ print(f"\n{'steps':>8s} | " + " | ".join(f"{s:>10s}" for s in STATS))
 for steps, row in results.items():
     print(f"{steps:8d} | " + " | ".join(f"{row[s]['w1']:6.2f}({row[s]['bias_z']:+.2f})" for s in STATS))
 
-suffix = "" if a.activation == "silu" else f"_{a.activation}"
-json.dump({"toy": toy.name, "N": toy.N, "d": toy.d, "activation": a.activation, "results": results},
-          open(f"results/toys/{toy.name}_diag_supervised{suffix}.json", "w"), indent=1, default=float)
+suffix = ""
+if a.activation != "silu":
+    suffix += f"_{a.activation}"
+if a.hidden != 256 or a.depth != 4:
+    suffix += f"_h{a.hidden}d{a.depth}"
+json.dump({"toy": toy.name, "N": toy.N, "d": toy.d, "activation": a.activation, "hidden": a.hidden, "depth": a.depth,
+          "results": results}, open(f"results/toys/{toy.name}_diag_supervised{suffix}.json", "w"), indent=1, default=float)
 print("saved")
