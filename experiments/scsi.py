@@ -34,6 +34,39 @@ torch.set_default_dtype(torch.float32)
 DT = torch.float64  # dtype for matrix functions / simulation
 
 
+def safe_eigh(C: torch.Tensor, chunk: int = 8192):
+    """torch.linalg.eigh, chunked over the batch.
+
+    cuSOLVER's batched symmetric eigensolver has an internal batch-size ceiling well below what plain
+    CPU LAPACK (called in a loop under the hood) tolerates -- e.g. a batch of 200,000 8x8 matrices
+    (SCSIConfig.pool_init) raises CUSOLVER_STATUS_INVALID_VALUE from cusolverDnXsyevBatched on an A100,
+    while 8192 succeeds. Chunking is applied on every device (harmless on CPU) so the code path is the
+    same regardless of where it runs. Handles arbitrary leading batch dims, as torch.linalg.eigh does."""
+    lead = C.shape[:-2]
+    n = int(torch.tensor(lead).prod()) if lead else 1
+    if n <= chunk:
+        return torch.linalg.eigh(C)
+    flat = C.reshape(n, *C.shape[-2:])
+    ws, Vs = [], []
+    for s in range(0, n, chunk):
+        w, V = torch.linalg.eigh(flat[s:s + chunk])
+        ws.append(w); Vs.append(V)
+    d = C.shape[-1]
+    return torch.cat(ws).reshape(*lead, d), torch.cat(Vs).reshape(*lead, d, d)
+
+
+def safe_eigvalsh(C: torch.Tensor, chunk: int = 8192):
+    """torch.linalg.eigvalsh, chunked the same way as safe_eigh (eigenvalues only, cheaper when the
+    eigenvectors aren't needed -- e.g. scoring a (M,J,d,d) block of posterior draws)."""
+    lead = C.shape[:-2]
+    n = int(torch.tensor(lead).prod()) if lead else 1
+    if n <= chunk:
+        return torch.linalg.eigvalsh(C)
+    flat = C.reshape(n, *C.shape[-2:])
+    ws = [torch.linalg.eigvalsh(flat[s:s + chunk]) for s in range(0, n, chunk)]
+    return torch.cat(ws).reshape(*lead, C.shape[-1])
+
+
 # --------------------------------------------------------------------------- #
 # matrix utilities
 # --------------------------------------------------------------------------- #
@@ -60,12 +93,12 @@ class Sym:
 
     @staticmethod
     def logm(C: torch.Tensor) -> torch.Tensor:
-        w, V = torch.linalg.eigh(C)
+        w, V = safe_eigh(C)
         return (V * torch.log(w.clamp_min(1e-300)).unsqueeze(-2)) @ V.transpose(-1, -2)
 
     @staticmethod
     def expm(S: torch.Tensor) -> torch.Tensor:
-        w, V = torch.linalg.eigh(S)
+        w, V = safe_eigh(S)
         return (V * torch.exp(w).unsqueeze(-2)) @ V.transpose(-1, -2)
 
     def encode(self, C: torch.Tensor, eps0: float = 0.0) -> torch.Tensor:

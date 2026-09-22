@@ -6,7 +6,7 @@ import math
 import numpy as np
 import torch
 
-from scsi import DT, wishart_channel
+from scsi import DT, wishart_channel, safe_eigvalsh
 
 
 # ----------------------------------------------------------------------------------------------- #
@@ -181,7 +181,7 @@ def airm_distance(A, B):
     L = torch.linalg.cholesky(A)
     Li = torch.linalg.inv(L)
     M = Li @ B @ Li.transpose(-1, -2)
-    w = torch.linalg.eigvalsh((M + M.transpose(-1, -2)) / 2)
+    w = safe_eigvalsh((M + M.transpose(-1, -2)) / 2)   # A,B can carry a large (M,J,...) batch of posterior draws
     return torch.sqrt((torch.log(w.clamp_min(1e-300)) ** 2).sum(-1))
 
 

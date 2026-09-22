@@ -9,7 +9,7 @@ import argparse, json, math, os, time
 import numpy as np, torch
 from scipy import stats as sps
 
-from scsi import SCSI, SCSIConfig, Drift, Sym, wishart_channel, DT
+from scsi import SCSI, SCSIConfig, Drift, Sym, wishart_channel, DT, safe_eigvalsh
 from covutils import IWPrior
 from toys import make_toy
 
@@ -30,7 +30,7 @@ def stats_of(C, Ce):
     """C: (M,J,d,d), Ce: (M,d,d) -> dict of (M,J) tensors."""
     w, V = torch.linalg.eigh(Ce)
     vt, vb = V[..., -1], V[..., 0]
-    we = torch.linalg.eigvalsh(C)
+    we = safe_eigvalsh(C)     # C is (M,J,d,d) with J up to a couple thousand -- chunked for cuSOLVER's batch limit
     dv = lambda v: torch.einsum("mi,mjik,mk->mj", v, C, v)
     return {"logdet": torch.linalg.slogdet(C)[1], "logcond": torch.log(we[..., -1] / we[..., 0]),
             "top_share": we[..., -1] / we.sum(-1), "ldv_top": torch.log(dv(vt)), "ldv_bot": torch.log(dv(vb)),
