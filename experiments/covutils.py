@@ -76,7 +76,7 @@ class IWPrior:
         with torch.no_grad():
             self.Psi0, self.nu0 = build(raw, a)
         self.nu0 = float(self.nu0)
-        self.loglik = -float(loss)
+        self.loglik = -float(loss.detach())
 
     def posterior_params(self, Ce):
         return self.nu0 + self.N, self.Psi0 + self.N * Ce
