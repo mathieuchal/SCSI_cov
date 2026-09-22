@@ -34,10 +34,10 @@ os.makedirs("results/toys", exist_ok=True)
 val, best = {}, (None, -1e30)
 
 
-def _save(net, path):
+def _save(net, k, path):
     # checkpoints are stored on CPU regardless of training device, so they load anywhere
-    torch.save({"state": {k: v.cpu() for k, v in net.state_dict().items()},
-                "mu": net.mu.cpu().clone(), "sd": net.sd.cpu().clone(), "N": N, "d": d}, path)
+    torch.save({"state": {kk: v.cpu() for kk, v in net.state_dict().items()},
+                "mu": net.mu.cpu().clone(), "sd": net.sd.cpu().clone(), "k": k, "N": N, "d": d}, path)
 
 
 def cb(m, k):
@@ -46,10 +46,10 @@ def cb(m, k):
         Cs = m.sample_posterior(Ce_cal, 64)
         val[k] = float(posterior_predictive_logscore(Ce_val, N, Cs).mean())
         print(f"   [val] outer {k}: predictive log-score = {val[k]:.3f}", flush=True)
-        _save(m.ema_net, f"results/toys/{toy.name}_k{k}.pt")   # every checkpoint (trajectory analysis)
+        _save(m.ema_net, k, f"results/toys/{toy.name}_k{k}.pt")   # every checkpoint (trajectory analysis)
         if val[k] > best[1]:
             best = (k, val[k])
-            _save(m.ema_net, f"results/toys/{toy.name}_model.pt")
+            _save(m.ema_net, k, f"results/toys/{toy.name}_model.pt")
 
 t0 = time.time()
 model.fit(Ce_tr, callback=cb)
