@@ -133,17 +133,22 @@ def empirical_cov(X: torch.Tensor) -> torch.Tensor:
 # --------------------------------------------------------------------------- #
 # drift network
 # --------------------------------------------------------------------------- #
+_ACTS = {"silu": nn.SiLU, "relu": nn.ReLU, "gelu": nn.GELU, "tanh": nn.Tanh}
+
+
 class Drift(nn.Module):
-    def __init__(self, p: int, mu: torch.Tensor, sd: torch.Tensor, hidden=256, depth=4, nfreq=8):
+    def __init__(self, p: int, mu: torch.Tensor, sd: torch.Tensor, hidden=256, depth=4, nfreq=8, activation="silu"):
         super().__init__()
         self.p = p
+        self.activation = activation
+        act = _ACTS[activation]
         self.register_buffer("mu", mu.float())
         self.register_buffer("sd", sd.float())
         self.register_buffer("freq", (2.0 ** torch.arange(nfreq)) * math.pi)
         din = 2 * p + 2 * nfreq + 1
-        layers = [nn.Linear(din, hidden), nn.SiLU()]
+        layers = [nn.Linear(din, hidden), act()]
         for _ in range(depth - 1):
-            layers += [nn.Linear(hidden, hidden), nn.SiLU()]
+            layers += [nn.Linear(hidden, hidden), act()]
         layers += [nn.Linear(hidden, p)]
         self.net = nn.Sequential(*layers)
         # zero-init last layer: start from b = 0 (scaled)
@@ -187,6 +192,7 @@ class SCSIConfig:
     threads: int = 4
     init: str = "raw"          # 'raw' | 'deconv'
     device: str = "cpu"         # 'cpu' | 'cuda' | 'cuda:N'
+    activation: str = "silu"    # 'silu' | 'relu' | 'gelu' | 'tanh' (see scsi._ACTS)
     verbose: bool = True
 
 
@@ -320,8 +326,8 @@ class SCSI:
         # normalisation stats for the network (fixed for the whole run)
         mu = Ye.mean(0)
         sd = Ye.std(0).clamp_min(1e-3)
-        self.net = Drift(S.p, mu, sd, cfg.hidden, cfg.depth).to(self.device)
-        self.ema_net = Drift(S.p, mu, sd, cfg.hidden, cfg.depth).to(self.device)
+        self.net = Drift(S.p, mu, sd, cfg.hidden, cfg.depth, activation=cfg.activation).to(self.device)
+        self.ema_net = Drift(S.p, mu, sd, cfg.hidden, cfg.depth, activation=cfg.activation).to(self.device)
         self.ema_net.load_state_dict(self.net.state_dict())
         for q in self.ema_net.parameters():
             q.requires_grad_(False)
@@ -358,8 +364,8 @@ class SCSI:
         Ce_ref = Ce_ref.to(DT).to(self.device)
         Ye = S.encode(Ce_ref, cfg.eps0)
         mu, sd = Ye.mean(0), Ye.std(0).clamp_min(1e-3)
-        self.net = Drift(S.p, mu, sd, cfg.hidden, cfg.depth).to(self.device)
-        self.ema_net = Drift(S.p, mu, sd, cfg.hidden, cfg.depth).to(self.device)
+        self.net = Drift(S.p, mu, sd, cfg.hidden, cfg.depth, activation=cfg.activation).to(self.device)
+        self.ema_net = Drift(S.p, mu, sd, cfg.hidden, cfg.depth, activation=cfg.activation).to(self.device)
         self.ema_net.load_state_dict(self.net.state_dict())
         for q in self.ema_net.parameters():
             q.requires_grad_(False)

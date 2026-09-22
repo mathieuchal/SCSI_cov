@@ -30,11 +30,12 @@ ap.add_argument("--n_test", type=int, default=128)
 ap.add_argument("--n_ref", type=int, default=2048)
 ap.add_argument("--J", type=int, default=1024)
 ap.add_argument("--seed", type=int, default=2024)
+ap.add_argument("--activation", default="silu", choices=["silu", "relu", "gelu", "tanh"])
 a = ap.parse_args()
 torch.set_num_threads(a.threads)
 dev = torch.device(a.device)
 toy = make_toy(a.toy, device=dev)
-print(f"toy={a.toy} device={dev} d={toy.d} N={toy.N} M={toy.M}", flush=True)
+print(f"toy={a.toy} device={dev} d={toy.d} N={toy.N} M={toy.M} activation={a.activation}", flush=True)
 
 # same test set / reference as toy_eval.py (same seed, so directly comparable to the self-consistent run)
 C_true, Ce = make_testset(toy, a.n_test)
@@ -60,7 +61,8 @@ results = {}
 for steps in [int(x) for x in a.steps.split(",")]:
     print(f"\n=== supervised control, {steps} gradient steps (fresh network, fresh {200_000}-covariance pool of TRUE draws) ===", flush=True)
     gen = torch.Generator(device=dev).manual_seed(a.seed)
-    cfg = SCSIConfig(N=toy.N, d=toy.d, kappa=1.0, threads=a.threads, device=str(dev), seed=a.seed, pool_init=200_000)
+    cfg = SCSIConfig(N=toy.N, d=toy.d, kappa=1.0, threads=a.threads, device=str(dev), seed=a.seed, pool_init=200_000,
+                     activation=a.activation)
     model = SCSI(cfg)
 
     def sampler(n, gen=gen):
@@ -77,5 +79,7 @@ print(f"\n{'steps':>8s} | " + " | ".join(f"{s:>10s}" for s in STATS))
 for steps, row in results.items():
     print(f"{steps:8d} | " + " | ".join(f"{row[s]['w1']:6.2f}({row[s]['bias_z']:+.2f})" for s in STATS))
 
-json.dump({"toy": toy.name, "N": toy.N, "d": toy.d, "results": results}, open(f"results/toys/{toy.name}_diag_supervised.json", "w"), indent=1, default=float)
+suffix = "" if a.activation == "silu" else f"_{a.activation}"
+json.dump({"toy": toy.name, "N": toy.N, "d": toy.d, "activation": a.activation, "results": results},
+          open(f"results/toys/{toy.name}_diag_supervised{suffix}.json", "w"), indent=1, default=float)
 print("saved")
