@@ -65,11 +65,16 @@ def get_reference(toy, Ce, n_ref, cache):
 
 
 def load_scsi(toy, path, threads=2, device=None):
+    """Architecture (hidden/depth/activation) is read from the checkpoint itself, not assumed from
+    SCSIConfig's defaults -- so this always reconstructs the right shape regardless of what the
+    checkpoint was actually trained with (older checkpoints without these fields fall back to the
+    long-standing hidden=256/depth=4/silu default)."""
     device = device or toy.device
     z = torch.load(path, map_location="cpu")
-    cfg = SCSIConfig(N=toy.N, d=toy.d, kappa=1.0, threads=threads, device=str(device))
+    hidden, depth, activation = z.get("hidden", 256), z.get("depth", 4), z.get("activation", "silu")
+    cfg = SCSIConfig(N=toy.N, d=toy.d, kappa=1.0, threads=threads, device=str(device), hidden=hidden, depth=depth, activation=activation)
     m = SCSI(cfg)
-    m.ema_net = Drift(Sym(toy.d).p, z["mu"], z["sd"], cfg.hidden, cfg.depth).to(device)
+    m.ema_net = Drift(Sym(toy.d).p, z["mu"], z["sd"], hidden, depth, activation=activation).to(device)
     m.ema_net.load_state_dict(z["state"])
     return m, z["k"]
 
