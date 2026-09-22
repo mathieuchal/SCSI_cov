@@ -14,7 +14,7 @@ import argparse, json, math, os, time
 import numpy as np, pandas as pd
 import torch
 
-from scsi import SCSI, SCSIConfig, Sym, Drift, wishart_channel, DT
+from scsi import SCSI, SCSIConfig, Sym, Drift, wishart_channel, DT, safe_eigvalsh
 from covutils import (IWPrior, oas_shrink, nls_shrink, wishart_logscore, posterior_predictive_logscore, directional_pit,
                       coverage_from_pit, bootstrap_ci)
 
@@ -33,17 +33,20 @@ ap.add_argument("--threads", type=int, default=4)
 ap.add_argument("--folds", default="1995,2005,2015")
 ap.add_argument("--seed", type=int, default=0)
 ap.add_argument("--tag", default="")
+ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
 args = ap.parse_args()
 torch.set_num_threads(args.threads)
+dev = torch.device(args.device)
 d, NW, NF, J = args.d, args.nw, args.nf, args.J
 TAG = f"fin_d{d}_nw{NW}_s{args.seed}{args.tag}"
 os.makedirs("results", exist_ok=True)
+print(f"device={dev}", flush=True)
 
 df = pd.read_pickle("data/ff48_vw_daily.pkl")
 R = df.values.astype(np.float64)                      # % daily returns
 dates = df.index
 T, A = R.shape
-S_ = Sym(d)
+S_ = Sym(d, device=dev)
 year = dates.year.values
 first_idx = lambda y: int(np.searchsorted(year, y))    # first row of calendar year y
 
@@ -69,7 +72,7 @@ def train_tasks(train_end_idx, rng):
         for _ in range(args.subsets_per_window):
             a = np.sort(rng.choice(avail, d, replace=False))
             out.append(scm(e, a))
-    return torch.tensor(np.stack(out), dtype=DT)
+    return torch.tensor(np.stack(out), dtype=DT, device=dev)
 
 
 def test_paths(train_end_idx, test_end_idx, rng):
@@ -124,7 +127,7 @@ def posterior_K(Cal, draws):
 
 
 def mv_weights(C):
-    x = torch.linalg.solve(C, torch.ones(C.shape[-1], 1, dtype=C.dtype).expand(*C.shape[:-2], -1, -1))
+    x = torch.linalg.solve(C, torch.ones(C.shape[-1], 1, dtype=C.dtype, device=C.device).expand(*C.shape[:-2], -1, -1))
     return (x / x.sum((-1, -2), keepdim=True)).squeeze(-1)
 
 
@@ -138,7 +141,7 @@ def make_cases(baskets, ends):
             if not window_ok(e, a):
                 continue
             cal.append(scm(e, a)); fwd.append(scm(e, a, e + 1, e + 1 + NF)); meta.append((b, e))
-    return torch.tensor(np.stack(cal), dtype=DT), torch.tensor(np.stack(fwd), dtype=DT), np.array(meta)
+    return torch.tensor(np.stack(cal), dtype=DT, device=dev), torch.tensor(np.stack(fwd), dtype=DT, device=dev), np.array(meta)
 
 
 def calibrate_neff(rng):
@@ -150,9 +153,9 @@ def calibrate_neff(rng):
     for sc in (0.3, 0.45, 0.6, 0.8, 1.0):
         N = max(int(round(NW * sc)), d + 2); Nf = max(int(round(NF * sc)), 3)
         iw = IWPrior(Ce_tr, N, iters=300)
-        Cs = iw.sample_posterior(Cal, 128, gen=torch.Generator().manual_seed(1))
-        dirs = torch.eye(d, dtype=DT)
-        pit, _, _ = directional_pit(None, Fwd, Nf, Cs, dirs, gen=torch.Generator().manual_seed(2))
+        Cs = iw.sample_posterior(Cal, 128, gen=torch.Generator(device=dev).manual_seed(1))
+        dirs = torch.eye(d, dtype=DT, device=dev)
+        pit, _, _ = directional_pit(None, Fwd, Nf, Cs, dirs, gen=torch.Generator(device=dev).manual_seed(2))
         cov = coverage_from_pit(pit)
         score = float(posterior_predictive_logscore(Fwd, Nf, Cs).mean())
         err = sum(abs(cov[k] - k) for k in cov)
@@ -199,18 +202,18 @@ for fi, (y0, y1) in enumerate(fold_bounds):
 
     ck = f"results/{TAG}_fold{fi}.pt"
     cfg = SCSIConfig(N=N, d=d, kappa=1.0, n_outer=args.n_outer, steps_first=args.steps_first, steps_outer=args.steps_outer,
-                     seed=args.seed + fi, init="deconv", log_prior_inflate=1.5, threads=args.threads, n_recon=6)
+                     seed=args.seed + fi, init="deconv", log_prior_inflate=1.5, threads=args.threads, n_recon=6, device=str(dev))
     model = SCSI(cfg)
     if os.path.exists(ck):
         Ye = S_.encode(Ce_tr, 0.0)
-        model.ema_net = Drift(S_.p, Ye.mean(0), Ye.std(0).clamp_min(1e-3), cfg.hidden, cfg.depth)
-        model.ema_net.load_state_dict(torch.load(ck))
+        model.ema_net = Drift(S_.p, Ye.mean(0), Ye.std(0).clamp_min(1e-3), cfg.hidden, cfg.depth).to(dev)
+        model.ema_net.load_state_dict(torch.load(ck, map_location="cpu"))
         print("    loaded", ck)
     else:
         model.fit(Ce_tr)
-        torch.save(model.ema_net.state_dict(), ck)
+        torch.save({k: v.cpu() for k, v in model.ema_net.state_dict().items()}, ck)
     iw = IWPrior(Ce_tr, N, iters=600)
-    g = torch.Generator().manual_seed(100 + fi)
+    g = torch.Generator(device=dev).manual_seed(100 + fi)
     D_si = model.sample_posterior(Cal, J, gen=g)
     D_iw = iw.sample_posterior(Cal, J, gen=g)
     print(f"    sampling done ({time.time()-t0:.0f}s total)", flush=True)
@@ -221,53 +224,54 @@ for fi, (y0, y1) in enumerate(fold_bounds):
     K_gd = gd_K(lcal, N)
     K_si, risk_si = posterior_K(Cal, D_si)
     K_iw, _ = posterior_K(Cal, D_iw)
+    idx = torch.arange(len(Cal), device=dev)
     est = {
         "SCM": Cal,
         "OAS shrinkage": oas_shrink(Cal, N),
         "LW nonlinear shrinkage": nls_shrink(Cal, N),
         "PCA K=1": fam[:, 1], "PCA K=3": fam[:, 3],
-        "PCA K=GD (plug-in)": fam[torch.arange(len(Cal)), K_gd.clamp(0, d)],
-        "PCA K=Bayes (SC-SI)": fam[torch.arange(len(Cal)), K_si],
-        "PCA K=Bayes (IW)": fam[torch.arange(len(Cal)), K_iw],
+        "PCA K=GD (plug-in)": fam[idx, K_gd.clamp(0, d)],
+        "PCA K=Bayes (SC-SI)": fam[idx, K_si],
+        "PCA K=Bayes (IW)": fam[idx, K_iw],
         "IW post. mean": D_iw.mean(1),
         "SC-SI post. mean": D_si.mean(1),
         "SC-SI Stein-opt.": torch.linalg.inv(torch.linalg.inv(D_si).mean(1)),
     }
     for n_, C_hat in est.items():
         w = mv_weights(C_hat)
-        out_cases[n_]["var"].append(torch.einsum("mi,mij,mj->m", w, Fwd, w).numpy())
-        out_cases[n_]["stein_fwd"].append(stein_loss(C_hat, Fwd).numpy())
-    Ks["GD"].append(K_gd.numpy()); Ks["post"].append(K_si.numpy()); Ks["postIW"].append(K_iw.numpy())
+        out_cases[n_]["var"].append(torch.einsum("mi,mij,mj->m", w, Fwd, w).cpu().numpy())
+        out_cases[n_]["stein_fwd"].append(stein_loss(C_hat, Fwd).cpu().numpy())
+    Ks["GD"].append(K_gd.cpu().numpy()); Ks["post"].append(K_si.cpu().numpy()); Ks["postIW"].append(K_iw.cpu().numpy())
     meta_all.append(meta); fold_all.append(np.full(len(Cal), fi))
-    risk_store.append(risk_si.numpy())
+    risk_store.append(risk_si.cpu().numpy())
     # predictive log-scores of the forward window
-    ll_scores["SCM"].append(wishart_logscore(Fwd, NfE, Cal).numpy())
-    ll_scores["OAS shrinkage"].append(wishart_logscore(Fwd, NfE, est["OAS shrinkage"]).numpy())
-    ll_scores["LW nonlinear shrinkage"].append(wishart_logscore(Fwd, NfE, est["LW nonlinear shrinkage"]).numpy())
-    ll_scores["IW"].append(posterior_predictive_logscore(Fwd, NfE, D_iw).numpy())
-    ll_scores["SC-SI"].append(posterior_predictive_logscore(Fwd, NfE, D_si).numpy())
+    ll_scores["SCM"].append(wishart_logscore(Fwd, NfE, Cal).cpu().numpy())
+    ll_scores["OAS shrinkage"].append(wishart_logscore(Fwd, NfE, est["OAS shrinkage"]).cpu().numpy())
+    ll_scores["LW nonlinear shrinkage"].append(wishart_logscore(Fwd, NfE, est["LW nonlinear shrinkage"]).cpu().numpy())
+    ll_scores["IW"].append(posterior_predictive_logscore(Fwd, NfE, D_iw).cpu().numpy())
+    ll_scores["SC-SI"].append(posterior_predictive_logscore(Fwd, NfE, D_si).cpu().numpy())
     # calibration of forward directional variances (assets + equal-weight)
-    ew = torch.ones(1, d, dtype=DT) / math.sqrt(d)
-    dirs = torch.cat([torch.eye(d, dtype=DT), ew], 0)
+    ew = torch.ones(1, d, dtype=DT, device=dev) / math.sqrt(d)
+    dirs = torch.cat([torch.eye(d, dtype=DT, device=dev), ew], 0)
     for nm, Cs in (("SC-SI", D_si), ("IW", D_iw), ("SCM", Cal[:, None].expand(-1, J, -1, -1)),
                    ("OAS shrinkage", est["OAS shrinkage"][:, None].expand(-1, J, -1, -1)),
                    ("LW nonlinear shrinkage", est["LW nonlinear shrinkage"][:, None].expand(-1, J, -1, -1))):
-        pit, _, _ = directional_pit(None, Fwd, NfE, Cs, dirs, gen=torch.Generator().manual_seed(9))
-        pit_store[nm].append(pit.numpy())
+        pit, _, _ = directional_pit(None, Fwd, NfE, Cs, dirs, gen=torch.Generator(device=dev).manual_seed(9))
+        pit_store[nm].append(pit.cpu().numpy())
     # time series for the first path (figure): posterior of eigenvalue shares and P(meaningful)
-    m0 = meta[:, 0] == 0
-    Dm = D_si[torch.tensor(m0)]
-    ev = torch.linalg.eigvalsh(Dm).flip(-1)                            # (m,J,d) descending
+    m0 = torch.tensor(meta[:, 0] == 0, device=dev)
+    Dm = D_si[m0]
+    ev = safe_eigvalsh(Dm).flip(-1)                                    # (m,J,d) descending; m*J can exceed cuSOLVER's batch limit
     share = ev / ev.sum(-1, keepdim=True)
     rho = ev / ev.median(-1, keepdim=True).values                       # signal-to-bulk ratio of population eigenvalues
-    l_plug = torch.linalg.eigvalsh(Cal[torch.tensor(m0)]).flip(-1)
+    l_plug = torch.linalg.eigvalsh(Cal[m0]).flip(-1)
     rho_plug = l_plug / l_plug.median(-1, keepdim=True).values
     path_records.append(dict(
-        end=meta[m0, 1], share_mean=share.mean(1)[:, :4].numpy(), share_lo=torch.quantile(share, 0.1, 1)[:, :4].numpy(),
-        share_hi=torch.quantile(share, 0.9, 1)[:, :4].numpy(),
-        p_meaningful=(rho > 3).to(DT).mean(1)[:, :5].numpy(), plug_meaningful=(rho_plug > 3).to(DT)[:, :5].numpy(),
-        K_gd=K_gd[torch.tensor(m0)].numpy(), K_post=K_si[torch.tensor(m0)].numpy(),
-        plug_share=(l_plug / l_plug.sum(-1, keepdim=True))[:, :4].numpy()))
+        end=meta[m0.cpu().numpy(), 1], share_mean=share.mean(1)[:, :4].cpu().numpy(), share_lo=torch.quantile(share, 0.1, 1)[:, :4].cpu().numpy(),
+        share_hi=torch.quantile(share, 0.9, 1)[:, :4].cpu().numpy(),
+        p_meaningful=(rho > 3).to(DT).mean(1)[:, :5].cpu().numpy(), plug_meaningful=(rho_plug > 3).to(DT)[:, :5].cpu().numpy(),
+        K_gd=K_gd[m0].cpu().numpy(), K_post=K_si[m0].cpu().numpy(),
+        plug_share=(l_plug / l_plug.sum(-1, keepdim=True))[:, :4].cpu().numpy()))
     print(f"    fold done in {time.time()-t0:.0f}s", flush=True)
 
 # ------------------------------------------------------------------------------------------------ #

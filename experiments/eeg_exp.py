@@ -11,7 +11,7 @@ import argparse, json, math, os, time
 import numpy as np
 import torch
 
-from scsi import SCSI, SCSIConfig, Sym, wishart_channel, DT
+from scsi import SCSI, SCSIConfig, Sym, Drift, wishart_channel, DT
 from covutils import (IWPrior, oas_shrink, nls_shrink, wishart_logscore, posterior_predictive_logscore, directional_pit,
                       coverage_from_pit, airm_distance, tangent_features, inv_sqrt, bootstrap_ci)
 
@@ -27,8 +27,10 @@ ap.add_argument("--seed", type=int, default=0)
 ap.add_argument("--threads", type=int, default=4)
 ap.add_argument("--tag", default="")
 ap.add_argument("--retrain", action="store_true")
+ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
 args = ap.parse_args()
 torch.set_num_threads(args.threads)
+dev = torch.device(args.device)
 TAG = f"eeg_w{args.win}_s{args.seed}_k{args.kappa}_e{args.neff_scale}{args.tag}"
 os.makedirs("results", exist_ok=True)
 
@@ -36,13 +38,13 @@ os.makedirs("results", exist_ok=True)
 # data, effective N, subject split
 # ------------------------------------------------------------------------------------------------ #
 z = np.load(f"data/eeg_scm_{args.win}s.npz")
-scm_win = torch.tensor(z["scm_win"], dtype=DT)          # (S, 2, W, d, d)   cond 0 = open, 1 = closed
-scm_full = torch.tensor(z["scm_full"], dtype=DT)        # (S, 2, d, d)
+scm_win = torch.tensor(z["scm_win"], dtype=DT, device=dev)          # (S, 2, W, d, d)   cond 0 = open, 1 = closed
+scm_full = torch.tensor(z["scm_full"], dtype=DT, device=dev)        # (S, 2, d, d)
 Sn, _, W, d, _ = scm_win.shape
 n_samp = int(z["n_win"])
 ratio = float(np.median(z["neff_ratio"]))
 N = int(round(ratio * n_samp * args.neff_scale))
-print(f"subjects={Sn} windows/run={W} d={d}  samples/window={n_samp}  N_eff/n={ratio:.4f} -> N={N} (N/d={N/d:.1f})")
+print(f"device={dev}  subjects={Sn} windows/run={W} d={d}  samples/window={n_samp}  N_eff/n={ratio:.4f} -> N={N} (N/d={N/d:.1f})")
 rng = np.random.default_rng(args.seed)
 perm = rng.permutation(Sn)
 n_tr, n_va = int(0.65 * Sn), int(0.10 * Sn)
@@ -50,7 +52,7 @@ tr, va, te = perm[:n_tr], perm[n_tr:n_tr + n_va], perm[n_tr + n_va:]
 print(f"split subjects: train={len(tr)} val={len(va)} test={len(te)}")
 Ce_train = scm_win[tr].reshape(-1, d, d)                # unlabeled pool of noisy covariances, both conditions
 print("training ensemble M =", Ce_train.shape[0])
-S_ = Sym(d)
+S_ = Sym(d, device=dev)
 
 
 def make_cases(subj_idx, with_next=True):
@@ -63,12 +65,22 @@ def make_cases(subj_idx, with_next=True):
     return torch.stack(cal), torch.stack(val), np.array(meta)
 
 
+def _save_ckpt(net, path):
+    # stored on CPU regardless of training device, so a checkpoint loads on any machine
+    torch.save({k: v.cpu() for k, v in net.state_dict().items()}, path)
+
+
+def _load_ckpt(net, path):
+    net.load_state_dict(torch.load(path, map_location="cpu"))
+    return net
+
+
 # ------------------------------------------------------------------------------------------------ #
 # fit SC-SI (checkpoints on the outer iterations) and the IW baseline
 # ------------------------------------------------------------------------------------------------ #
 cfg = SCSIConfig(N=N, d=d, kappa=args.kappa, n_outer=args.n_outer, steps_first=args.steps_first,
                  steps_outer=args.steps_outer, seed=args.seed, init="deconv", log_prior_inflate=1.5,
-                 threads=args.threads, n_recon=8)
+                 threads=args.threads, n_recon=8, device=str(dev))
 model = SCSI(cfg)
 ck_dir = f"results/{TAG}_ckpt"
 os.makedirs(ck_dir, exist_ok=True)
@@ -80,7 +92,7 @@ val_curve = {}
 
 def cb(m, k):
     if k in CK:
-        torch.save(m.ema_net.state_dict(), f"{ck_dir}/k{k}.pt")
+        _save_ckpt(m.ema_net, f"{ck_dir}/k{k}.pt")
         Cs = m.sample_posterior(Cal_va, 64)
         val_curve[k] = float(posterior_predictive_logscore(Val_va, N, Cs).mean())
         print(f"   [val] outer {k}: predictive log-score = {val_curve[k]:.4f}", flush=True)
@@ -91,8 +103,7 @@ if have and not args.retrain:
     val_curve = {int(k): v for k, v in json.load(open(f"results/{TAG}_val.json")).items()}
     # rebuild network shell with same normalisation stats
     Ye = S_.encode(Ce_train, 0.0)
-    from scsi import Drift
-    model.ema_net = Drift(S_.p, Ye.mean(0), Ye.std(0).clamp_min(1e-3), cfg.hidden, cfg.depth)
+    model.ema_net = Drift(S_.p, Ye.mean(0), Ye.std(0).clamp_min(1e-3), cfg.hidden, cfg.depth).to(dev)
     print("loaded cached checkpoints")
 else:
     t0 = time.time()
@@ -102,7 +113,7 @@ else:
 
 kbest = max(val_curve, key=val_curve.get)
 print("validation curve:", {k: round(v, 3) for k, v in val_curve.items()}, " -> selected outer iteration", kbest)
-model.ema_net.load_state_dict(torch.load(f"{ck_dir}/k{kbest}.pt"))
+_load_ckpt(model.ema_net, f"{ck_dir}/k{kbest}.pt")
 
 iw = IWPrior(Ce_train, N, iters=800)
 print(f"IW baseline fitted by marginal likelihood: nu0={iw.nu0:.2f}, trace(Psi0)/(nu0-d-1)={float(iw.Psi0.trace())/(iw.nu0-d-1):.2f}")
@@ -113,7 +124,7 @@ print(f"IW baseline fitted by marginal likelihood: nu0={iw.nu0:.2f}, trace(Psi0)
 Cal, Val, meta = make_cases(te)
 subj_id = meta[:, 0]
 J = args.J
-gen = torch.Generator().manual_seed(1234)
+gen = torch.Generator(device=dev).manual_seed(1234)
 draws = {
     "SC-SI (ours)": model.sample_posterior(Cal, J, gen=gen),
     "IW conjugate (ML-fitted)": iw.sample_posterior(Cal, J, gen=gen),
@@ -129,7 +140,7 @@ Cref_full = torch.stack(Cref_full)
 
 # directions: channel axes + top-3 pooled PCs of the training ensemble
 evals, evecs = torch.linalg.eigh(Ce_train.mean(0))
-dirs = torch.cat([torch.eye(d, dtype=DT), evecs[:, -3:].T], 0)          # (d+3, d)
+dirs = torch.cat([torch.eye(d, dtype=DT, device=dev), evecs[:, -3:].T], 0)          # (d+3, d)
 dir_names = list(map(str, z["channels"])) + ["PC1", "PC2", "PC3"]
 
 results = {"N": N, "d": d, "kbest": kbest, "val_curve": val_curve, "n_test_cases": int(len(meta)),
@@ -145,15 +156,15 @@ for name in list(plugins) + list(draws):
         Cs = draws[name]
         score = posterior_predictive_logscore(Val, N, Cs)
     pit, pred, obs = directional_pit(None, Val, N, Cs, dirs, gen=gen)
-    per_case_score[name] = score.numpy()
-    pit_all[name] = pit.numpy()
+    per_case_score[name] = score.cpu().numpy()
+    pit_all[name] = pit.cpu().numpy()
     lo, hi = torch.quantile(pred, 0.1, dim=-1), torch.quantile(pred, 0.9, dim=-1)
-    width_all[name] = torch.log(hi / lo).numpy()
+    width_all[name] = torch.log(hi / lo).cpu().numpy()
     cov = coverage_from_pit(pit)
     results["methods"][name] = {"logscore": None, "coverage": cov}
 
 # oracle-ish reference: plug-in with the run-average of the other windows (uses much more data; not causal)
-per_case_score["Long-run proxy (reference)"] = wishart_logscore(Val, N, Cref_full).numpy()
+per_case_score["Long-run proxy (reference)"] = wishart_logscore(Val, N, Cref_full).cpu().numpy()
 
 base = per_case_score["Sample cov."]
 for name, sc in per_case_score.items():
@@ -189,8 +200,8 @@ pt = {"Sample cov.": Cal, "Linear shrinkage (OAS)": plugins["Linear shrinkage (O
       "SC-SI Stein-optimal": torch.linalg.inv(torch.linalg.inv(draws["SC-SI (ours)"]).mean(1))}
 results["point"] = {}
 for name, Ch in pt.items():
-    st = stein(Ch, Cref_full).numpy()
-    ai = airm_distance(Ch, Cref_full).numpy()
+    st = stein(Ch, Cref_full).cpu().numpy()
+    ai = airm_distance(Ch, Cref_full).cpu().numpy()
     results["point"][name] = {"stein": bootstrap_ci(st, subj_id), "airm": bootstrap_ci(ai, subj_id)}
     print(f"{name:26s} Stein loss={st.mean():.3f}  AIRM to long-run={ai.mean():.3f}")
 
@@ -199,7 +210,7 @@ for name, Ch in pt.items():
 # ------------------------------------------------------------------------------------------------ #
 def dist_experiment():
     outs = []
-    gen2 = torch.Generator().manual_seed(77)
+    gen2 = torch.Generator(device=dev).manual_seed(77)
     rows = []
     for s in te:
         for j in range(W):
@@ -207,20 +218,20 @@ def dist_experiment():
     Ao = torch.stack([scm_win[s, 0, j] for s, j in rows]); Ac = torch.stack([scm_win[s, 1, j] for s, j in rows])
     ref_o = torch.stack([scm_win[s, 0, [i for i in range(W) if i != j]].mean(0) for s, j in rows])
     ref_c = torch.stack([scm_win[s, 1, [i for i in range(W) if i != j]].mean(0) for s, j in rows])
-    ref = airm_distance(ref_o, ref_c).numpy()
+    ref = airm_distance(ref_o, ref_c).cpu().numpy()
     sub = np.array([s for s, _ in rows])
     res = {"reference_mean": float(ref.mean())}
     D = {}
-    D["Sample cov."] = airm_distance(Ao, Ac)[:, None].numpy()
-    D["Linear shrinkage (OAS)"] = airm_distance(oas_shrink(Ao, N), oas_shrink(Ac, N))[:, None].numpy()
-    D["Nonlinear shrinkage (LW)"] = airm_distance(nls_shrink(Ao, N), nls_shrink(Ac, N))[:, None].numpy()
+    D["Sample cov."] = airm_distance(Ao, Ac)[:, None].cpu().numpy()
+    D["Linear shrinkage (OAS)"] = airm_distance(oas_shrink(Ao, N), oas_shrink(Ac, N)).cpu().numpy()[:, None]
+    D["Nonlinear shrinkage (LW)"] = airm_distance(nls_shrink(Ao, N), nls_shrink(Ac, N)).cpu().numpy()[:, None]
     # parametric bootstrap around the plug-in (frequentist uncertainty baseline)
     bo = wishart_channel(Ao[:, None].expand(-1, J, -1, -1).contiguous(), N, gen2)
     bc = wishart_channel(Ac[:, None].expand(-1, J, -1, -1).contiguous(), N, gen2)
-    D["Param. bootstrap (SCM)"] = airm_distance(bo, bc).numpy()
+    D["Param. bootstrap (SCM)"] = airm_distance(bo, bc).cpu().numpy()
     for nm, sampler in (("IW conjugate (ML-fitted)", lambda A: iw.sample_posterior(A, J, gen=gen2)),
                         ("SC-SI (ours)", lambda A: model.sample_posterior(A, J, gen=gen2))):
-        D[nm] = airm_distance(sampler(Ao), sampler(Ac)).numpy()
+        D[nm] = airm_distance(sampler(Ao), sampler(Ac)).cpu().numpy()
     for nm, dd in D.items():
         pt_est = np.median(dd, 1)
         err = np.abs(pt_est - ref)
@@ -250,7 +261,7 @@ Iref = inv_sqrt(Cref)
 
 
 def feats(C):
-    return tangent_features(C, Iref, S_).numpy()
+    return tangent_features(C, Iref, S_).cpu().numpy()
 
 
 tr_C = scm_win[tr].reshape(-1, d, d)
@@ -259,7 +270,7 @@ te_C = scm_win[te].reshape(-1, d, d)
 te_y = np.tile(np.repeat(np.arange(2), W), len(te))
 te_sub = np.repeat(te, 2 * W)
 Jc = 64
-gen3 = torch.Generator().manual_seed(5)
+gen3 = torch.Generator(device=dev).manual_seed(5)
 te_draws = model.sample_posterior(te_C, Jc, gen=gen3)                    # (M,Jc,d,d)
 tr_draws = model.sample_posterior(tr_C, 4, gen=gen3)                     # 4 draws per training window
 scaler = StandardScaler().fit(feats(tr_C))

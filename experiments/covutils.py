@@ -6,7 +6,7 @@ import math
 import numpy as np
 import torch
 
-from scsi import DT, wishart_channel, safe_eigvalsh
+from scsi import DT, wishart_channel, safe_eigh, safe_eigvalsh
 
 
 # ----------------------------------------------------------------------------------------------- #
@@ -118,7 +118,7 @@ def nls_shrink(Ce, N):
     c = d / float(N)
     if c >= 1.0:
         raise ValueError("analytical NLS implemented for N > d")
-    lam, U = torch.linalg.eigh(Ce)                               # ascending
+    lam, U = safe_eigh(Ce)                                       # ascending; chunked for cuSOLVER's batch limit
     lam = lam.clamp_min(1e-12 * lam[..., -1:])
     h = float(N) ** (-1.0 / 3.0)
     hj = h * lam.unsqueeze(-2)                                   # (...,1,d): bandwidth of eigenvalue j
