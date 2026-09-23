@@ -41,7 +41,9 @@ for i, t in enumerate(TOYS):
         if j == 0: ax.set_ylabel(TITLE[t], fontsize=9, rotation=0, ha="right", va="center", labelpad=42)
 h, l = axs[0, 0].get_legend_handles_labels()
 fig.legend(h, l, loc="lower center", ncol=5, fontsize=8.5, bbox_to_anchor=(0.5, -0.005))
-fig.tight_layout(rect=(0, 0.03, 1, 1)); fig.savefig("figs/toys_T1_posterior_marginals.png"); plt.close(fig)
+fig.suptitle(f"test observation #{OBS} of 128 (seeded test set, index passed on the command line)", fontsize=8, y=1.0)
+t1_suffix = "" if OBS == 0 else f"_obs{OBS}"
+fig.tight_layout(rect=(0, 0.03, 1, 0.99)); fig.savefig(f"figs/toys_T1_posterior_marginals{t1_suffix}.png"); plt.close(fig)
 
 # ------------------------------------------------------------------ T2: pooled PIT of learner draws under the reference marginals
 fig, axs = plt.subplots(nT, nS, figsize=(2.55 * nS, 1.95 * nT), squeeze=False)
