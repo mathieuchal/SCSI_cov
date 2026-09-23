@@ -32,11 +32,13 @@ n_tr, n_va = int(0.65 * Sn), int(0.10 * Sn)
 tr, va, te = perm[:n_tr], perm[n_tr:n_tr + n_va], perm[n_tr + n_va:]
 Ce_train = scm_win[tr].reshape(-1, d, d)
 S_ = Sym(d, device=dev)
-cfg = SCSIConfig(N=N, d=d, kappa=1.0, init="deconv", log_prior_inflate=1.5, threads=a.threads, device=str(dev))
+zck = torch.load(f"results/{TAG}_ckpt/k{KBEST}.pt", map_location="cpu")
+hid, dep = (zck["hidden"], zck["depth"]) if "state" in zck else (256, 4)      # older checkpoints: bare state_dict, default net
+cfg = SCSIConfig(N=N, d=d, kappa=1.0, init="deconv", log_prior_inflate=1.5, threads=a.threads, device=str(dev), hidden=hid, depth=dep)
 model = SCSI(cfg)
 Ye = S_.encode(Ce_train, 0.0)
-model.ema_net = Drift(S_.p, Ye.mean(0), Ye.std(0).clamp_min(1e-3), cfg.hidden, cfg.depth).to(dev)
-model.ema_net.load_state_dict(torch.load(f"results/{TAG}_ckpt/k{KBEST}.pt", map_location="cpu"))
+model.ema_net = Drift(S_.p, Ye.mean(0), Ye.std(0).clamp_min(1e-3), hid, dep).to(dev)
+model.ema_net.load_state_dict(zck["state"] if "state" in zck else zck)
 iw = IWPrior(Ce_train, N, iters=800)
 print(f"device={dev}  N={N} d={d}; test subjects={len(te)}; SC-SI checkpoint k={KBEST}")
 
@@ -133,6 +135,6 @@ for name in allm:
                                  bias_to_val=bootstrap_ci((dist_pt - obs).cpu().numpy(), sub_r))
     print(f"   {name:28s} cov 50/80/95 = " + "/".join(f"{v:.3f}" for v in cov.values()) +
           f"   plug-in distance bias vs held-out half = {res['distance'][name]['bias_to_val'][0]:+.3f}")
-json.dump(res, open(f"results/{TAG}_splithalf.json", "w"), indent=1, default=float)
-np.savez(f"results/{TAG}_splithalf_arrays.npz", meta=meta, score_names=np.array(list(sc)), scores=np.stack([sc[k] for k in sc]))
+json.dump(res, open(f"results/{TAG}_splithalf_k{KBEST}.json" if hid != 256 else f"results/{TAG}_splithalf.json", "w"), indent=1, default=float)
+np.savez(f"results/{TAG}_splithalf_k{KBEST}_arrays.npz" if hid != 256 else f"results/{TAG}_splithalf_arrays.npz", meta=meta, score_names=np.array(list(sc)), scores=np.stack([sc[k] for k in sc]))
 print("saved")

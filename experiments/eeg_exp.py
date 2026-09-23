@@ -13,7 +13,7 @@ import torch
 
 from scsi import SCSI, SCSIConfig, Sym, Drift, wishart_channel, DT
 from covutils import (IWPrior, oas_shrink, nls_shrink, wishart_logscore, posterior_predictive_logscore, directional_pit,
-                      coverage_from_pit, airm_distance, tangent_features, inv_sqrt, bootstrap_ci)
+                      coverage_from_pit, airm_distance, tangent_features, inv_sqrt, bootstrap_ci, worst_case_pit_ks)
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--win", type=int, default=4)
@@ -27,11 +27,16 @@ ap.add_argument("--seed", type=int, default=0)
 ap.add_argument("--threads", type=int, default=4)
 ap.add_argument("--tag", default="")
 ap.add_argument("--retrain", action="store_true")
+ap.add_argument("--hidden", type=int, default=256)
+ap.add_argument("--depth", type=int, default=4)
+ap.add_argument("--force_k", type=int, default=None,
+                help="evaluate this saved outer iteration instead of the validation-selected one (no stopping criterion)")
 ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
 args = ap.parse_args()
 torch.set_num_threads(args.threads)
 dev = torch.device(args.device)
 TAG = f"eeg_w{args.win}_s{args.seed}_k{args.kappa}_e{args.neff_scale}{args.tag}"
+OUT = TAG + ("" if args.force_k is None else f"_k{args.force_k}")     # result files; checkpoints/val curves stay under TAG
 os.makedirs("results", exist_ok=True)
 
 # ------------------------------------------------------------------------------------------------ #
@@ -66,12 +71,14 @@ def make_cases(subj_idx, with_next=True):
 
 
 def _save_ckpt(net, path):
-    # stored on CPU regardless of training device, so a checkpoint loads on any machine
-    torch.save({k: v.cpu() for k, v in net.state_dict().items()}, path)
+    # stored on CPU regardless of training device, so a checkpoint loads on any machine; the architecture
+    # travels with it so eeg_exp2.py can rebuild the right shape without assuming defaults
+    torch.save({"state": {k: v.cpu() for k, v in net.state_dict().items()}, "hidden": args.hidden, "depth": args.depth}, path)
 
 
 def _load_ckpt(net, path):
-    net.load_state_dict(torch.load(path, map_location="cpu"))
+    z_ = torch.load(path, map_location="cpu")
+    net.load_state_dict(z_["state"] if "state" in z_ else z_)          # older checkpoints are a bare state_dict
     return net
 
 
@@ -80,14 +87,14 @@ def _load_ckpt(net, path):
 # ------------------------------------------------------------------------------------------------ #
 cfg = SCSIConfig(N=N, d=d, kappa=args.kappa, n_outer=args.n_outer, steps_first=args.steps_first,
                  steps_outer=args.steps_outer, seed=args.seed, init="deconv", log_prior_inflate=1.5,
-                 threads=args.threads, n_recon=8, device=str(dev))
+                 threads=args.threads, n_recon=8, device=str(dev), hidden=args.hidden, depth=args.depth)
 model = SCSI(cfg)
 ck_dir = f"results/{TAG}_ckpt"
 os.makedirs(ck_dir, exist_ok=True)
 CK = [0, 2, 5, 8, 12, 16, 20, 25, 30]
 CK = [k for k in CK if k <= args.n_outer]
 Cal_va, Val_va, meta_va = make_cases(va)
-val_curve = {}
+val_curve, val_wc = {}, {}
 
 
 def cb(m, k):
@@ -95,12 +102,17 @@ def cb(m, k):
         _save_ckpt(m.ema_net, f"{ck_dir}/k{k}.pt")
         Cs = m.sample_posterior(Cal_va, 64)
         val_curve[k] = float(posterior_predictive_logscore(Val_va, N, Cs).mean())
-        print(f"   [val] outer {k}: predictive log-score = {val_curve[k]:.4f}", flush=True)
+        wc, ks = worst_case_pit_ks(Val_va, N, Cs, Cal_va, gen=m.gen)
+        val_wc[k] = wc
+        print(f"   [val] outer {k}: predictive log-score = {val_curve[k]:.4f}  worst_ks = {wc:.3f}  ("
+              + ", ".join(f"{n}={v:.3f}" for n, v in ks.items()) + ")", flush=True)
 
 
 have = all(os.path.exists(f"{ck_dir}/k{k}.pt") for k in CK) and os.path.exists(f"results/{TAG}_val.json")
 if have and not args.retrain:
     val_curve = {int(k): v for k, v in json.load(open(f"results/{TAG}_val.json")).items()}
+    if os.path.exists(f"results/{TAG}_valwc.json"):
+        val_wc = {int(k): v for k, v in json.load(open(f"results/{TAG}_valwc.json")).items()}
     # rebuild network shell with same normalisation stats
     Ye = S_.encode(Ce_train, 0.0)
     model.ema_net = Drift(S_.p, Ye.mean(0), Ye.std(0).clamp_min(1e-3), cfg.hidden, cfg.depth).to(dev)
@@ -109,10 +121,16 @@ else:
     t0 = time.time()
     model.fit(Ce_train, callback=cb)
     json.dump(val_curve, open(f"results/{TAG}_val.json", "w"))
+    json.dump(val_wc, open(f"results/{TAG}_valwc.json", "w"))
     print(f"SC-SI fit: {time.time()-t0:.0f}s")
 
-kbest = max(val_curve, key=val_curve.get)
-print("validation curve:", {k: round(v, 3) for k, v in val_curve.items()}, " -> selected outer iteration", kbest)
+kbest_ls = max(val_curve, key=val_curve.get)
+kbest_wc = min(val_wc, key=val_wc.get) if val_wc else None
+kbest = args.force_k if args.force_k is not None else kbest_ls
+print("validation curve:", {k: round(v, 3) for k, v in val_curve.items()})
+print("worst-case PIT-KS curve:", {k: round(v, 3) for k, v in val_wc.items()})
+print(f"log-score would pick k={kbest_ls}; worst-case PIT-KS would pick k={kbest_wc}; "
+      + (f"--force_k: evaluating k={kbest}" if args.force_k is not None else f"evaluating k={kbest} (log-score)"), flush=True)
 _load_ckpt(model.ema_net, f"{ck_dir}/k{kbest}.pt")
 
 iw = IWPrior(Ce_train, N, iters=800)
@@ -143,7 +161,8 @@ evals, evecs = torch.linalg.eigh(Ce_train.mean(0))
 dirs = torch.cat([torch.eye(d, dtype=DT, device=dev), evecs[:, -3:].T], 0)          # (d+3, d)
 dir_names = list(map(str, z["channels"])) + ["PC1", "PC2", "PC3"]
 
-results = {"N": N, "d": d, "kbest": kbest, "val_curve": val_curve, "n_test_cases": int(len(meta)),
+results = {"N": N, "d": d, "kbest": kbest, "kbest_logscore": kbest_ls, "kbest_worstcase": kbest_wc, "hidden": args.hidden,
+           "val_curve": val_curve, "val_curve_worst_ks": val_wc, "n_test_cases": int(len(meta)),
            "n_test_subjects": int(len(te)), "methods": {}}
 per_case_score = {}
 pit_all = {}
@@ -316,13 +335,13 @@ for name, p in prob.items():
     results["classif"][name] = r
     print(f"{name:50s} acc={r['acc'][0]:.3f} NLL={r['nll'][0]:.3f} ECE={r['ece']:.3f} acc@80%cov={r['sel_acc_80']:.3f} acc@50%cov={r['sel_acc_50']:.3f}")
 
-json.dump(results, open(f"results/{TAG}_results.json", "w"), indent=1, default=float)
+json.dump(results, open(f"results/{OUT}_results.json", "w"), indent=1, default=float)
 
 # save arrays needed for figures
-np.savez(f"results/{TAG}_arrays.npz", pit=np.stack([pit_all[k] for k in pit_all]), pit_names=np.array(list(pit_all)),
+np.savez(f"results/{OUT}_arrays.npz", pit=np.stack([pit_all[k] for k in pit_all]), pit_names=np.array(list(pit_all)),
          dir_names=np.array(dir_names), width=np.stack([width_all[k] for k in width_all]),
          meta=meta, score=np.stack([per_case_score[k] for k in per_case_score]), score_names=np.array(list(per_case_score)),
          dist_ref=ref_dist, dist_names=np.array(list(Ddist)), dist_sub=sub_dist,
          **{f"dist_{i}": v for i, v in enumerate(Ddist.values())},
          prob=np.stack(list(prob.values())), prob_names=np.array(list(prob)), te_y=te_y, te_sub=te_sub)
-print("saved", TAG)
+print("saved", OUT)
