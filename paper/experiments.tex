@@ -1,0 +1,201 @@
+% ---------------------------------------------------------------------------------------------------
+% Experiments section.  \input this file into the main paper.
+%   Packages: graphicx, booktabs, amsmath, amssymb, natbib (or adapt \citep).
+%   Figures : figs/fig_toy_logscore.pdf, figs/fig_toy_stats.pdf, figs/fig_eeg.pdf, figs/fig_finance.pdf
+%             (regenerate with experiments/paper_figs.py)
+%   Labels expected from the appendix: app:toys, app:eeg, app:finance, app:selection.
+%   Citation keys used (rename to your .bib): chen2010shrinkage, ledoit2020analytical, gavish2014optimal,
+%             goldberger2000physionet, schalk2004bci2000, barachant2012multiclass.
+% ---------------------------------------------------------------------------------------------------
+\providecommand{\scsi}{\textsc{SC-SI}}
+\providecommand{\Ce}{C_{\mathrm{e}}}
+
+\section{Experiments}
+\label{sec:experiments}
+
+We ask three questions, ordered by how much ground truth is available.
+\textbf{(i)}~When the posterior is known exactly, does self-consistent training from noisy covariances alone recover it (\S\ref{sec:exp-toys})?
+\textbf{(ii)}~On real covariance data with no ground truth, are the learned posteriors calibrated on held-out subjects (\S\ref{sec:exp-eeg})?
+\textbf{(iii)}~Does the posterior improve a downstream decision, and does it stay calibrated as market regimes change (\S\ref{sec:exp-fin})?
+In every experiment the learner sees only noisy empirical covariances $\Ce$ produced by the known Wishart channel; clean covariances are never used, not even for model selection.
+
+\paragraph{Baselines and protocol shared by all experiments.}
+We compare against the sample covariance, OAS linear shrinkage~\citep{chen2010shrinkage}, Ledoit--Wolf analytical nonlinear shrinkage (LW-NLS)~\citep{ledoit2020analytical}, and a conjugate inverse-Wishart prior fitted by marginal likelihood (IW-ML), the standard parametric Bayesian baseline.
+A point estimator becomes a predictive law by adding Wishart channel noise around the estimate; it carries no estimation uncertainty of its own.
+On a finite ensemble, self-consistent EM eventually over-sharpens the learned prior, so the outer iteration $k$ must be selected.
+We select it on held-out validation pairs $(\Ce^{\mathrm{cal}},\Ce^{\mathrm{val}})$ that share a latent covariance, with a \emph{worst-case PIT score}: for a small set of functionals of $C$ (log-determinant, log condition number, top-eigenvalue share, an off-diagonal correlation, and the variance along the top and bottom empirical eigenvectors), we push posterior draws given $\Ce^{\mathrm{cal}}$ through the channel, compute the probability integral transform (PIT) of the observed $\Ce^{\mathrm{val}}$ functional, and keep the iteration with the smallest worst-case Kolmogorov--Smirnov distance to uniformity.
+Unlike the aggregate predictive log-score, this score cannot trade one functional against another (Appendix~\ref{app:selection}).
+It needs no ground truth, so it applies unchanged to real data.
+
+% =====================================================================================================
+\subsection{Toy models with oracles}
+\label{sec:exp-toys}
+
+\paragraph{Setting and aim.}
+We use three $d{=}8$ priors whose posterior $P(C\mid \Ce)$ is available as an oracle.
+Two are inverse-Wishart, rotationally invariant (RI, $N{=}40$) or with an anisotropic scale matrix of condition number 16 (non-RI, $N{=}28$); conjugacy makes their posterior exact.
+The third is a two-factor model $C=BB^\top+\mathrm{diag}(\psi)$ ($N{=}28$) with a non-conjugate posterior, computed by Hamiltonian Monte Carlo ($\hat R\le 1.02$).
+\scsi{} sees only $M{=}2000$--$3000$ noisy covariances per prior.
+The aim is to measure how close a learner that never observes a clean $C$ gets to the oracle, and whether it beats the parametric IW-ML baseline exactly when that baseline is misspecified.
+We report (a)~the held-out predictive log-score of $\Ce^{\mathrm{val}}$ given $\Ce^{\mathrm{cal}}$, relative to the oracle, and (b)~the Wasserstein-1 distance between the learned and oracle posteriors of six statistics of $C$, in units of the oracle's posterior standard deviation, averaged over 128 held-out tasks (sampling floor $0.055$; details in Appendix~\ref{app:toys}).
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figs/fig_toy_logscore.pdf}
+  \caption{\textbf{Self-consistent training approaches the oracle.}
+  Held-out predictive log-score relative to the oracle posterior (300 validation pairs, nats per task) along EM iterations $k$; $k{=}0$ is the deconvolved log-Gaussian initialisation.
+  Dashed: IW-ML.
+  Circle: checkpoint selected by the worst-case PIT score; diamond: log-score maximiser, when different.
+  The sample-covariance plug-in lies 14--25 nats below the oracle (off scale).}
+  \label{fig:toy-logscore}
+\end{figure}
+
+\paragraph{Results.}
+\textbf{EM closes most of the gap to the oracle.}
+From the initialisation at $k{=}0$, self-consistent iterations close 67\%, 70\% and 55\% of the log-score gap to the oracle on the RI, non-RI and factor priors (Fig.~\ref{fig:toy-logscore}).
+\textbf{Where the parametric family is right it wins; where it is wrong, \scsi{} does.}
+On the conjugate priors IW-ML is exact by construction (0.1--0.2 nats from the oracle), and \scsi{} trails it by 0.4--0.5 nats: the price of not knowing the family.
+On the factor model the ordering flips: IW-ML sits 5.0 nats below the oracle and \scsi{} 3.2, a gain of 1.8 nats.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figs/fig_toy_stats.pdf}
+  \caption{\textbf{Posterior of six statistics of $C$ on the three toy priors.}
+  Draws for the test task with median error (median over 128 tasks of the mean $W_1$ across statistics), not selected for appearance; dashed line: true value.
+  Aggregate distances over all 128 tasks are in Table~\ref{tab:toy-w1}.}
+  \label{fig:toy-stats}
+\end{figure}
+
+\begin{table}[t]
+  \centering
+  \caption{\textbf{Distance to the oracle posterior.}
+  Wasserstein-1 distance in units of the oracle posterior s.d., mean over 128 held-out tasks (lower is better; sampling floor $0.055$).
+  $\kappa$: condition number; $\mathrm{dv}$: log variance along the top/bottom empirical eigenvector of $\Ce$; $C_{01}$: correlation of the first two coordinates.}
+  \label{tab:toy-w1}
+  \footnotesize
+  \setlength{\tabcolsep}{3.5pt}
+  \begin{tabular}{@{}llccccccc@{}}
+    \toprule
+    Prior & Method & $\log\det C$ & $\log\kappa$ & top share & $\mathrm{dv}_{\mathrm{top}}$ & $\mathrm{dv}_{\mathrm{bot}}$ & $C_{01}$ & mean \\
+    \midrule
+    IW, RI & \scsi{} & 0.26 & 0.42 & 0.43 & 0.47 & 0.35 & 0.23 & 0.36 \\
+     & IW-ML & 0.05 & 0.05 & 0.05 & 0.05 & 0.05 & 0.05 & 0.05 \\
+    \midrule
+    IW, non-RI & \scsi{} & 0.23 & 0.22 & 0.23 & 0.25 & 0.31 & 0.22 & 0.24 \\
+     & IW-ML & 0.05 & 0.05 & 0.05 & 0.05 & 0.05 & 0.05 & 0.05 \\
+    \midrule
+    Factor model & \scsi{} & 0.27 & 0.70 & 0.32 & 0.29 & 0.90 & 0.35 & 0.47 \\
+     & IW-ML & 0.27 & 1.00 & 0.65 & 0.85 & 1.15 & 0.45 & 0.73 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\textbf{The posterior is accurate on the statistics that matter.}
+On the IW priors \scsi{} lies within 0.2--0.5 oracle standard deviations on all six statistics (Fig.~\ref{fig:toy-stats}, Table~\ref{tab:toy-w1}); the hardest are the spectrum-shape statistics of the RI prior, where its posterior is slightly too narrow (s.d.\ ratio $0.85$--$0.94$).
+On the factor model \scsi{} is closer to the oracle than IW-ML on five of six statistics and tied on $\log\det C$ (mean $0.47$ vs.\ $0.73$), by $1.4$--$2.9\times$ on the log condition number, the top-eigenvalue share and the top-direction variance, the statistics that depend on the shape of the spectrum, where a misspecified conjugate family has little freedom.
+The largest residual errors remain the log condition number and the bottom-direction variance ($0.70$, $0.90$), where IW-ML is worse still.
+
+\textbf{Selection matters.}
+The aggregate log-score and the worst-case PIT score pick different checkpoints (Fig.~\ref{fig:toy-logscore}, circle vs.\ diamond).
+On the RI prior the log-score maximiser ($k{=}24$) is worse than our pick ($k{=}12$) on all six statistics (mean $W_1$ $0.50$ vs.\ $0.36$; log condition number $0.72$ vs.\ $0.42$), and likewise on the non-RI prior ($0.28$ vs.\ $0.24$).
+The gap widens with dimension: at $d{=}20$ the log-score maximiser has a log-condition-number distance of $1.51$ against $0.33$ for our pick (Appendix~\ref{app:toys}).
+Accuracy also degrades with dimension: at $d{=}20$ the top-eigenvalue share and the top- and bottom-direction variances remain $1.1$--$1.4$ oracle standard deviations off even at the selected checkpoint, so we regard scaling the general algorithm beyond $d\approx 10$ as open.
+
+% =====================================================================================================
+\subsection{EEG: calibrated uncertainty for held-out subjects}
+\label{sec:exp-eeg}
+
+\paragraph{Setting and aim.}
+We use the PhysioNet EEG Motor Movement/Imagery dataset~\citep{goldberger2000physionet,schalk2004bci2000}: 109 subjects, resting eyes-open and eyes-closed runs, 8 channels (Fz, C3, Cz, C4, Pz, O1, Oz, O2), alpha band (8--13\,Hz), split into non-overlapping 4-s windows ($d{=}8$).
+Band-limited samples are serially correlated, so we use an effective $N{=}28$ ($N/d{=}3.5$), set from test--retest variability of half-windows on training subjects (Appendix~\ref{app:eeg}).
+The prior is learned from the 1960 unlabeled window covariances of 70 training subjects (both conditions pooled); 10 validation subjects select the checkpoint and 29 held-out subjects are used for testing.
+The aim is to test whether the learned posterior is a calibrated predictive law on \emph{unseen subjects}, and whether this helps a decision.
+
+\paragraph{Protocols and metrics.}
+For each test window we compute the posterior from a calibration window and score the predictive law of a validation window, under two protocols: \emph{split-half}, where both windows are interleaved 1-s chunks of the same 8-s epoch and thus share one covariance (isolating estimation uncertainty; 812 cases), and \emph{next window}, where the covariance may drift (754 cases).
+We report the predictive log-score, the coverage of central predictive intervals for directional variances and for nonlinear functionals of $C$, and eyes-open vs.\ eyes-closed classification from a single window with a logistic regression on tangent-space features~\citep{barachant2012multiclass}, using either the plug-in covariance or the average prediction over posterior draws.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figs/fig_eeg.pdf}
+  \caption{\textbf{EEG on held-out subjects.}
+  (a)~Predictive log-score gain over the sample covariance with 95\% subject-level bootstrap intervals; filled: split-half, hollow: next window.
+  (b)~Coverage of the central 80\% predictive interval (dashed: nominal) for directional variances (channel axes and top pooled PCs) and functionals of $C$, split-half.
+  (c)~Accuracy of eyes-open vs.\ eyes-closed classification when only the most confident windows are kept; SC-SI uses the posterior-averaged classifier, the others plug-in features.}
+  \label{fig:eeg}
+\end{figure}
+
+\paragraph{Results.}
+\textbf{Log-score.}
+In the split-half test \scsi{} gains $+5.0$ nats per window over the sample covariance (95\% CI $[3.0,6.5]$), against $+2.8$ for LW-NLS, $+0.1$ for IW-ML and $-16.0$ for OAS (Fig.~\ref{fig:eeg}a).
+The paired margin over the strongest point estimator, LW-NLS, is $+2.3$ $[0.4,3.6]$ nats.
+The ranking is preserved when the covariance drifts between windows ($+15.7$ for \scsi{} vs.\ $+8.6$ LW-NLS, $+8.7$ IW-ML, $-7.9$ OAS).
+\textbf{Calibration.}
+For directional variances the 80\% intervals of \scsi{} and IW-ML are close to nominal ($0.76$ each, at 50/80/95\%: $0.47/0.76/0.91$ and $0.46/0.76/0.92$), whereas the plug-ins under-cover ($0.63$--$0.65$ at 80\%).
+The two Bayesian methods separate on spectrum-dependent functionals (Fig.~\ref{fig:eeg}b): the 80\% interval of the log-determinant covers $0.65$ for \scsi{} against $0.43$ for IW-ML and $0.17$--$0.47$ for the plug-ins; for the log condition number, $0.77$ against $0.55$ and $0.14$--$0.66$.
+This is consistent with a conjugate prior's single concentration parameter being too rigid for the spectrum.
+IW-ML is better on the top-eigenvalue share ($0.83$ vs.\ $0.77$), and every method under-covers the open-vs-closed Riemannian distance ($0.26$--$0.41$; \scsi{} highest).
+\textbf{Decisions.}
+Averaging predictions over posterior draws raises single-window accuracy to $0.852$ from $0.78$--$0.82$ for the plug-ins and lowers the negative log-likelihood to $0.379$ from $0.43$--$0.47$; keeping the 50\% most confident windows gives $0.956$ against $0.90$--$0.91$ (Fig.~\ref{fig:eeg}c).
+Paired subject-level bootstrap intervals exclude zero for accuracy and NLL against the sample-covariance and LW-NLS plug-ins (accuracy $+3.2$ $[0.9,5.5]$ and $+4.3$ $[2.5,6.2]$ points).
+Calibration of the classifier itself is not improved (ECE $0.076$ vs.\ $0.027$--$0.051$), and on a second subject split the gain at 50\% retention did not replicate (Appendix~\ref{app:eeg}).
+
+\paragraph{Takeaway.}
+On unseen subjects the learned posterior is a calibrated predictive law for first-order quantities and, unlike a fitted conjugate prior, for spectrum-dependent functionals; the downstream classification benefit is modest.
+
+% =====================================================================================================
+\subsection{Financial returns: decisions across market regimes}
+\label{sec:exp-fin}
+
+\paragraph{Setting.}
+We use daily value-weighted returns of the 48 Ken French industry portfolios (1926--2026), with a zero-mean model.
+A task is a 63-day window and a random basket of $d{=}12$ industries observed throughout the window.
+The prior is learned from past windows only (non-overlapping windows, 16 random baskets each, $M\approx 4.5$--$5.7$k) and refit on three expanding folds; test months are 1995--2004, 2005--2014 and 2015--2026, with 8 fixed baskets and monthly forecasts (3008 cases).
+The effective sample size is calibrated on a validation fold that precedes all test folds, by maximising the calibration of forward intervals for IW-ML: $N{=}19$ for the 63-day window and $6$ for the 21-day forward window ($N/d{=}1.6$).
+It is not a sampling count; it inflates forecast uncertainty and absorbs drift between estimation and forecast windows (Appendix~\ref{app:finance}).
+
+\paragraph{Aim and estimators.}
+The aim is to test the posterior on a decision and on its calibration through time.
+The decision is the global minimum-variance portfolio built from each estimator, scored by its realised variance over the next 21 days relative to OAS.
+Estimators are the covariance estimates of \S\ref{sec:experiments}, the \scsi{} and IW-ML posterior means, the \scsi{} Stein-optimal covariance (inverse of the posterior mean of the inverse), and PCA factor models whose number of factors $K$ is chosen by the Gavish--Donoho threshold~\citep{gavish2014optimal} or by the Bayes rule minimising posterior expected Stein loss.
+
+\paragraph{Checkpoint selection.}
+Because the forward window has fewer effective observations than assets, a simulated forward covariance is rank-deficient and the log-determinant and condition number carry no information.
+The worst-case PIT score therefore uses the top-eigenvalue share, a correlation and the top-direction variance.
+It omits the bottom-direction variance, which a single window with $N/d{=}1.6$ is unlikely to identify.
+We made this choice after inspecting validation curves; Appendix~\ref{app:selection} reports the all-functional variant.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figs/fig_finance.pdf}
+  \caption{\textbf{Financial returns, 1995--2026.}
+  (a)~Out-of-sample minimum-variance portfolio: mean log ratio of realised 21-day variance to OAS with 95\% month-block bootstrap intervals (left is lower risk).
+  (b)~12-month rolling coverage of the central 80\% forward interval for the variances of the 12 assets and the equal-weight portfolio.
+  (c)~12-month rolling forward predictive log-score gain over the sample covariance.
+  Shaded: top tercile of trailing market volatility; dotted: model refits (2005, 2015).
+  All quantities are averaged over the 8 baskets of a month.}
+  \label{fig:finance}
+\end{figure}
+
+\paragraph{Results.}
+\textbf{The posterior improves the decision.}
+Using the \scsi{} posterior mean as the covariance input lowers realised variance by $3.4\%$ relative to OAS (log ratio $-0.034$, 95\% CI $[-0.043,-0.026]$; annualised volatility $14.12\%$ vs.\ $14.36\%$), and the Stein-optimal covariance is close ($-0.032$; Fig.~\ref{fig:finance}a).
+Every other estimator is at or above OAS: the IW-ML posterior mean ($+0.004$, not significant), LW-NLS ($+0.034$) and the sample covariance ($+0.095$).
+The advantage is steady rather than driven by a few episodes: it holds in each volatility tercile ($-0.051$, $-0.022$, $-0.030$ from low to high; Appendix~\ref{app:finance}).
+Using the posterior to pick the number of factors does not help: PCA with the \scsi{} Bayes rule is $+0.086$ above OAS, better than Gavish--Donoho ($+0.129$) or the IW-ML Bayes rule ($+0.119$) but far from the posterior mean.
+The value lies in using the whole posterior, not in a hard rank decision.
+\textbf{Calibration degrades in stress, less so for posterior-based laws.}
+The 80\% coverage of forward variances falls for every method in the global financial crisis and in COVID (Fig.~\ref{fig:finance}b).
+OAS and the sample covariance bottom out at $0.60$ and $0.48$--$0.49$, \scsi{} at $0.68$ and $0.59$, and IW-ML at $0.61$ and $0.66$.
+By volatility tercile, \scsi{} covers $0.84/0.85/0.79$ (low/mid/high), IW-ML $0.81/0.81/0.79$, OAS $0.77/0.80/0.73$ and the sample covariance $0.77/0.81/0.75$: in the top tercile the plug-ins fall to $0.73$--$0.75$ while both posterior methods stay at $0.79$.
+In calm markets \scsi{} is slightly conservative and IW-ML is closest to nominal.
+\textbf{Log-score does not separate \scsi{} from OAS.}
+Over the sample covariance, \scsi{} gains $+3.4$ nats $[2.3,4.8]$ per window against $+3.0$ $[1.8,4.7]$ for OAS, $+2.3$ for LW-NLS and $+1.0$ for IW-ML (Fig.~\ref{fig:finance}c).
+Gains are concentrated in a few episodes, chiefly a spike shared by all methods in early 2020, and intervals overlap in every regime.
+\textbf{Log-score and decision quality can disagree.}
+Training to $K{=}30$ without stopping, which is close to what the aggregate log-score selects (iterations 30/25/30 in the three folds), raises the \scsi{} log-score gain to $+4.4$ $[3.3,5.8]$ but removes the portfolio advantage ($-0.003$, $[-0.015,+0.010]$).
+A log-score stopping rule would therefore favour a model that is worse for the decision.
+The all-functional selection rule of Appendix~\ref{app:selection} gives a posterior-mean log ratio of $-0.029$ and a log-score gain of $+0.1$.
+
+\paragraph{Takeaway.}
+The posterior is most useful used whole: as a covariance input it beats shrinkage for minimum-variance investing in every volatility regime, and its predictive intervals hold up better than plug-in intervals in stress, but the effect is modest ($\approx 3\%$ of variance), rests on an effective sample size tuned for forecasting, and depends on how the training iteration is selected.
