@@ -41,6 +41,8 @@ ap.add_argument("--n_sde_steps", type=int, default=64)
 ap.add_argument("--val_years", type=float, default=3.0,
                 help="years immediately before each fold's training cutoff held out (excluded from the training "
                      "ensemble) for in-fold checkpoint-selection validation pairs")
+ap.add_argument("--ck", default="0,2,4,6,8,10,12,15,20,25,30",
+                help="comma-separated outer iterations at which to checkpoint and validate")
 ap.add_argument("--no_select", action="store_true",
                 help="skip worst-case-PIT-KS checkpoint selection; always use the last outer iteration "
                      "(n_outer), i.e. train blindly the way the original code did")
@@ -236,7 +238,7 @@ for fi, (y0, y1) in enumerate(fold_bounds):
     model = SCSI(cfg)
     ck_dir = f"results/{TAG}_fold{fi}_ckpt"
     os.makedirs(ck_dir, exist_ok=True)
-    CK = [k for k in (0, 2, 4, 6, 8, 10, 12, 15, 20, 25, 30) if k <= args.n_outer]
+    CK = [k for k in (int(x) for x in args.ck.split(',')) if k <= args.n_outer]
 
     def _save_ckpt(net, k):
         torch.save({"state": {kk: v.cpu() for kk, v in net.state_dict().items()},
