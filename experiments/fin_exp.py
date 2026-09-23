@@ -222,6 +222,7 @@ Ks = {"GD": [], "post": [], "postIW": []}
 meta_all, fold_all, ll_scores = [], [], {"SCM": [], "OAS shrinkage": [], "LW nonlinear shrinkage": [], "IW": [], "SC-SI": []}
 pit_store = {"OAS shrinkage": [], "LW nonlinear shrinkage": [], "IW": [], "SC-SI": [], "SCM": []}
 risk_store = []
+fac_store = {k: [] for k in ('pm_post', 'pm_plug', 'nm_mean', 'nm_sd')}    # per-case posterior of the number of meaningful factors
 
 for fi, (y0, y1) in enumerate(fold_bounds):
     t0 = time.time()
@@ -344,6 +345,16 @@ for fi, (y0, y1) in enumerate(fold_bounds):
                    ("LW nonlinear shrinkage", est["LW nonlinear shrinkage"][:, None].expand(-1, J, -1, -1))):
         pit, _, _ = directional_pit(None, Fwd, NfE, Cs, dirs, gen=torch.Generator(device=dev).manual_seed(9))
         pit_store[nm].append(pit.cpu().numpy())
+    # per-case posterior over "how many factors are meaningful" (population eigenvalue > 3 x median): P(factor k meaningful) and
+    # the mean / sd of the number of meaningful factors across posterior draws; plug-in = same rule on the sample spectrum
+    ev_all = safe_eigvalsh(D_si).flip(-1)
+    meaningful = (ev_all / ev_all.median(-1, keepdim=True).values) > 3
+    n_draw = meaningful.sum(-1).to(DT)
+    l_pl = torch.linalg.eigvalsh(Cal).flip(-1)
+    fac_store["pm_post"].append(meaningful.to(DT).mean(1)[:, :6].cpu().numpy())
+    fac_store["pm_plug"].append(((l_pl / l_pl.median(-1, keepdim=True).values) > 3).to(DT)[:, :6].cpu().numpy())
+    fac_store["nm_mean"].append(n_draw.mean(1).cpu().numpy()); fac_store["nm_sd"].append(n_draw.std(1).cpu().numpy())
+    del ev_all, meaningful
     # time series for the first path (figure): posterior of eigenvalue shares and P(meaningful)
     m0 = torch.tensor(meta[:, 0] == 0, device=dev)
     Dm = D_si[m0]
@@ -410,5 +421,8 @@ json.dump(results, open(f"results/{OUT}_results.json", "w"), indent=1, default=f
 np.savez(f"results/{OUT}_arrays.npz", meta=meta_all, fold=fold_all, Kg=Kg, Kp=Kp, Kiw=Kiw, risk=np.concatenate(risk_store),
          dates=dates.values.astype("datetime64[D]").astype(np.int64),
          **{f"var_{i}": var[n_] for i, n_ in enumerate(names)}, names=np.array(names),
-         **{f"path{fi}_{k}": v for fi, rec in enumerate(path_records) for k, v in rec.items()})
+         **{f"path{fi}_{k}": v for fi, rec in enumerate(path_records) for k, v in rec.items()},
+         **{"pit_" + k.replace(" ", "_"): np.concatenate(v) for k, v in pit_store.items()},      # (n_cases, d+1): asset axes + equal weight
+         **{"ll_" + k.replace(" ", "_"): np.concatenate(v) for k, v in ll_scores.items()},       # per-case forward predictive log-score
+         **{k: np.concatenate(v) for k, v in fac_store.items()})
 print("saved", OUT)
