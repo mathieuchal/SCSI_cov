@@ -10,7 +10,7 @@ import numpy as np, torch
 from scipy import stats as sps
 
 from scsi import SCSI, SCSIConfig, Drift, Sym, wishart_channel, DT, safe_eigvalsh
-from covutils import IWPrior
+from covutils import IWPrior, ks_unif
 from toys import make_toy
 
 STATS = ["logdet", "logcond", "top_share", "ldv_top", "ldv_bot", "corr01"]
@@ -90,11 +90,6 @@ def pit_vs_ref(x, ref):
     for m in range(x.shape[0]):
         s = np.sort(ref[m]); out[m] = np.searchsorted(s, x[m], side="right") / len(s)
     return out
-
-
-def ks_unif(u):
-    u = np.sort(np.asarray(u).ravel()); n = len(u)
-    return float(np.max(np.maximum(np.abs(u - np.arange(1, n + 1) / n), np.abs(u - np.arange(0, n) / n))))
 
 
 if __name__ == "__main__":

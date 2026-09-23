@@ -1,11 +1,18 @@
 """Train SC-SI on a toy ensemble (noisy Ce only), select the outer iteration on validation pairs, save the model.
 
-Validation pairs (Ce_cal, Ce_val) share a latent C (as the split-half pairs do in the real-data protocol); the criterion is the
-posterior predictive log-score of Ce_val given Ce_cal.  No clean covariance is given to the learner."""
+Validation pairs (Ce_cal, Ce_val) share a latent C (as the split-half pairs do in the real-data protocol). The
+checkpoint-selection criterion is the worst (max) PIT-KS-vs-uniform over a small set of scalar/directional
+functionals (logdet, log condition number, top-eigenvalue share, corr01, directional variance along Ce_cal's
+own top/bottom eigenvectors) -- see covutils.worst_case_pit_ks. The aggregate posterior-predictive log-score
+is still recorded for comparison but no longer drives selection: on iw_ri_d20 it kept improving well past the
+point where log condition number / top-eigenvalue share / top-directional-variance peaked, trading them off
+against the bottom-directional-variance functional it happens to weight more heavily -- the worst-case
+criterion instead refuses to sacrifice any one tracked functional for gains on another. No clean covariance is
+given to the learner."""
 import argparse, json, os, time
 import numpy as np, torch
 from scsi import SCSI, SCSIConfig, Sym, wishart_channel, DT
-from covutils import posterior_predictive_logscore
+from covutils import posterior_predictive_logscore, worst_case_pit_ks
 from toys import make_toy
 
 ap = argparse.ArgumentParser()
@@ -38,7 +45,7 @@ print(f"toy={a.toy} device={dev} d={d} N={N} M={toy.M}  net: hidden={a.hidden} d
       f"n_recon={a.n_recon} (bank={toy.M*a.n_recon})  n_sde_steps={a.n_sde_steps}", flush=True)
 CK = [k for k in (0, 2, 4, 6, 8, 10, 12, 16, 20, 24, 30, 40, 50, 60, 80, 100, 120, 150, 200, 250, 300) if k <= a.n_outer]
 os.makedirs("results/toys", exist_ok=True)
-val, best = {}, (None, -1e30)
+val, val_wc, best = {}, {}, (None, 1e30)
 
 
 def _save(net, k, path):
@@ -55,15 +62,20 @@ def cb(m, k):
     if k in CK:
         Cs = m.sample_posterior(Ce_cal, 64)
         val[k] = float(posterior_predictive_logscore(Ce_val, N, Cs).mean())
-        print(f"   [val] outer {k}: predictive log-score = {val[k]:.3f}", flush=True)
+        wc, ks = worst_case_pit_ks(Ce_val, N, Cs, Ce_cal, gen=m.gen)
+        val_wc[k] = wc
+        print(f"   [val] outer {k}: predictive log-score = {val[k]:.3f}  worst_ks = {wc:.3f}  ("
+              + ", ".join(f"{n}={v:.3f}" for n, v in ks.items()) + ")", flush=True)
         _save(m.ema_net, k, f"results/toys/{toy.name}_k{k}.pt")   # every checkpoint (trajectory analysis)
-        if val[k] > best[1]:
-            best = (k, val[k])
+        if wc < best[1]:
+            best = (k, wc)
             _save(m.ema_net, k, f"results/toys/{toy.name}_model.pt")
 
 t0 = time.time()
 model.fit(Ce_tr, callback=cb)
-json.dump({"val_curve": val, "best_k": best[0], "fit_sec": time.time() - t0, "M": toy.M, "N": N, "d": d,
-          "hidden": a.hidden, "depth": a.depth, "activation": a.activation, "n_recon": a.n_recon, "n_sde_steps": a.n_sde_steps},
+json.dump({"val_curve": val, "val_curve_worst_ks": val_wc, "best_k": best[0], "fit_sec": time.time() - t0,
+          "M": toy.M, "N": N, "d": d, "hidden": a.hidden, "depth": a.depth, "activation": a.activation,
+          "n_recon": a.n_recon, "n_sde_steps": a.n_sde_steps},
           open(f"results/toys/{toy.name}_train.json", "w"), indent=1)
-print(f"{toy.name}: selected outer iteration {best[0]}  (val curve {val})  fit {time.time()-t0:.0f}s")
+print(f"{toy.name}: selected outer iteration {best[0]} by worst-case PIT-KS={best[1]:.3f}  "
+      f"(val curve {val})  fit {time.time()-t0:.0f}s")

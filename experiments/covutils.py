@@ -191,6 +191,57 @@ def coverage_from_pit(pit, levels=(0.5, 0.8, 0.95)):
     return out
 
 
+def ks_unif(u):
+    """Two-sided KS statistic of a sample against Uniform(0,1)."""
+    u = np.sort(np.asarray(u).ravel())
+    n = len(u)
+    return float(np.max(np.maximum(np.abs(u - np.arange(1, n + 1) / n), np.abs(u - np.arange(0, n) / n))))
+
+
+def _f_logdet(Ce):
+    return torch.linalg.slogdet(Ce)[1]
+
+
+def _f_logcond(Ce):
+    w = safe_eigvalsh(Ce)
+    return torch.log(w[..., -1] / w[..., 0].clamp_min(1e-300))
+
+
+def _f_top_share(Ce):
+    w = safe_eigvalsh(Ce)
+    return w[..., -1] / w.sum(-1)
+
+
+def _f_corr01(Ce):
+    return Ce[..., 0, 1] / torch.sqrt(Ce[..., 0, 0] * Ce[..., 1, 1])
+
+
+_WC_FUNCS = {"logdet": _f_logdet, "logcond": _f_logcond, "top_share": _f_top_share, "corr01": _f_corr01}
+
+
+def worst_case_pit_ks(Ce_val, N, Cs, Ce_cal, gen=None):
+    """Ground-truth-free model-selection score: worst (max) PIT-KS-vs-uniform over a small set of
+    scalar/directional functionals (logdet, log condition number, top-eigenvalue share, corr01, and
+    directional variance along Ce_cal's own top/bottom eigenvectors), each checked via a posterior predictive
+    check against the real held-out Ce_val (push posterior draws Cs, conditioned on the companion observation
+    Ce_cal, through the known Wishart(N) channel). Uses only (Ce_cal, Ce_val, N) -- no latent C, no exact
+    reference posterior -- so it transfers directly to real data, unlike the toys' exact/HMC evaluation.
+
+    Motivation: the aggregate posterior-predictive log-score (posterior_predictive_logscore) can keep
+    improving well past the point where individual statistics like log condition number or top-eigenvalue
+    share start degrading, trading them off against others (e.g. directional variance along the bottom
+    eigenvector) that dominate the aggregate density fit -- see the iw_ri_d20 checkpoint sweeps. Selecting on
+    the worst tracked functional instead avoids being blind to that trade-off.
+
+    Cs: (M,J,d,d) posterior draws conditioned on Ce_cal. Returns (worst_ks, {name: ks}). Lower is better."""
+    ks = {name: ks_unif(functional_pit(Ce_val, N, Cs, fn, gen=gen)[0].cpu().numpy()) for name, fn in _WC_FUNCS.items()}
+    _, V_cal = torch.linalg.eigh(Ce_cal)
+    v_top, v_bot = V_cal[..., -1].unsqueeze(1), V_cal[..., 0].unsqueeze(1)
+    ks["ldv_top"] = ks_unif(directional_pit(None, Ce_val, N, Cs, v_top, gen=gen)[0].squeeze(-1).cpu().numpy())
+    ks["ldv_bot"] = ks_unif(directional_pit(None, Ce_val, N, Cs, v_bot, gen=gen)[0].squeeze(-1).cpu().numpy())
+    return max(ks.values()), ks
+
+
 # ----------------------------------------------------------------------------------------------- #
 # Riemannian geometry
 # ----------------------------------------------------------------------------------------------- #
