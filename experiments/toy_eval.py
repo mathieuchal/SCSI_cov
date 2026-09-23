@@ -72,7 +72,9 @@ def load_scsi(toy, path, threads=2, device=None):
     device = device or toy.device
     z = torch.load(path, map_location="cpu")
     hidden, depth, activation = z.get("hidden", 256), z.get("depth", 4), z.get("activation", "silu")
-    cfg = SCSIConfig(N=toy.N, d=toy.d, kappa=1.0, threads=threads, device=str(device), hidden=hidden, depth=depth, activation=activation)
+    n_sde_steps = z.get("n_sde_steps", 64)
+    cfg = SCSIConfig(N=toy.N, d=toy.d, kappa=1.0, threads=threads, device=str(device), hidden=hidden, depth=depth,
+                      activation=activation, n_sde_steps=n_sde_steps)
     m = SCSI(cfg)
     m.ema_net = Drift(Sym(toy.d).p, z["mu"], z["sd"], hidden, depth, activation=activation).to(device)
     m.ema_net.load_state_dict(z["state"])

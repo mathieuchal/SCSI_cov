@@ -21,6 +21,7 @@ ap.add_argument("--hidden", type=int, default=256)
 ap.add_argument("--depth", type=int, default=4)
 ap.add_argument("--activation", default="silu", choices=["silu", "relu", "gelu", "tanh"])
 ap.add_argument("--n_recon", type=int, default=8, help="reconstructions per training-set covariance per outer iteration (bank size = M * n_recon)")
+ap.add_argument("--n_sde_steps", type=int, default=64, help="Follmer SDE integration steps, used both for E-step reconstruction during EM and (via the checkpoint) at eval time")
 a = ap.parse_args()
 torch.set_num_threads(a.threads)
 dev = torch.device(a.device)
@@ -30,10 +31,11 @@ g = torch.Generator(device=dev).manual_seed(1000 + a.seed)
 C_tr = toy.sample_prior(toy.M, g); Ce_tr = wishart_channel(C_tr, N, g)                    # the ONLY training data: noisy Ce
 C_va = toy.sample_prior(a.n_val, g); Ce_cal = wishart_channel(C_va, N, g); Ce_val = wishart_channel(C_va, N, g)
 cfg = SCSIConfig(N=N, d=d, kappa=1.0, n_outer=a.n_outer, steps_first=a.steps_first, steps_outer=a.steps_outer, seed=a.seed,
-                 init="deconv", log_prior_inflate=1.5, threads=a.threads, n_recon=a.n_recon, device=str(dev),
+                 init="deconv", log_prior_inflate=1.5, threads=a.threads, n_recon=a.n_recon, n_sde_steps=a.n_sde_steps, device=str(dev),
                  hidden=a.hidden, depth=a.depth, activation=a.activation)
 model = SCSI(cfg)
-print(f"toy={a.toy} device={dev} d={d} N={N} M={toy.M}  net: hidden={a.hidden} depth={a.depth} activation={a.activation}  n_recon={a.n_recon} (bank={toy.M*a.n_recon})", flush=True)
+print(f"toy={a.toy} device={dev} d={d} N={N} M={toy.M}  net: hidden={a.hidden} depth={a.depth} activation={a.activation}  "
+      f"n_recon={a.n_recon} (bank={toy.M*a.n_recon})  n_sde_steps={a.n_sde_steps}", flush=True)
 CK = [k for k in (0, 2, 4, 6, 8, 10, 12, 16, 20, 24, 30, 40, 50, 60, 80, 100) if k <= a.n_outer]
 os.makedirs("results/toys", exist_ok=True)
 val, best = {}, (None, -1e30)
@@ -45,7 +47,7 @@ def _save(net, k, path):
     # regardless of what defaults it would otherwise assume.
     torch.save({"state": {kk: v.cpu() for kk, v in net.state_dict().items()},
                 "mu": net.mu.cpu().clone(), "sd": net.sd.cpu().clone(), "k": k, "N": N, "d": d,
-                "hidden": a.hidden, "depth": a.depth, "activation": a.activation}, path)
+                "hidden": a.hidden, "depth": a.depth, "activation": a.activation, "n_sde_steps": a.n_sde_steps}, path)
 
 
 def cb(m, k):
@@ -62,6 +64,6 @@ def cb(m, k):
 t0 = time.time()
 model.fit(Ce_tr, callback=cb)
 json.dump({"val_curve": val, "best_k": best[0], "fit_sec": time.time() - t0, "M": toy.M, "N": N, "d": d,
-          "hidden": a.hidden, "depth": a.depth, "activation": a.activation, "n_recon": a.n_recon},
+          "hidden": a.hidden, "depth": a.depth, "activation": a.activation, "n_recon": a.n_recon, "n_sde_steps": a.n_sde_steps},
           open(f"results/toys/{toy.name}_train.json", "w"), indent=1)
 print(f"{toy.name}: selected outer iteration {best[0]}  (val curve {val})  fit {time.time()-t0:.0f}s")
