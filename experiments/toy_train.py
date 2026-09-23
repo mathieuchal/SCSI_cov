@@ -36,7 +36,7 @@ cfg = SCSIConfig(N=N, d=d, kappa=1.0, n_outer=a.n_outer, steps_first=a.steps_fir
 model = SCSI(cfg)
 print(f"toy={a.toy} device={dev} d={d} N={N} M={toy.M}  net: hidden={a.hidden} depth={a.depth} activation={a.activation}  "
       f"n_recon={a.n_recon} (bank={toy.M*a.n_recon})  n_sde_steps={a.n_sde_steps}", flush=True)
-CK = [k for k in (0, 2, 4, 6, 8, 10, 12, 16, 20, 24, 30, 40, 50, 60, 80, 100) if k <= a.n_outer]
+CK = [k for k in (0, 2, 4, 6, 8, 10, 12, 16, 20, 24, 30, 40, 50, 60, 80, 100, 120, 150, 200, 250, 300) if k <= a.n_outer]
 os.makedirs("results/toys", exist_ok=True)
 val, best = {}, (None, -1e30)
 
