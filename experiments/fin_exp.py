@@ -16,7 +16,7 @@ import torch
 
 from scsi import SCSI, SCSIConfig, Sym, Drift, wishart_channel, DT, safe_eigvalsh
 from covutils import (IWPrior, oas_shrink, nls_shrink, wishart_logscore, posterior_predictive_logscore, directional_pit,
-                      coverage_from_pit, bootstrap_ci)
+                      coverage_from_pit, bootstrap_ci, worst_case_pit_ks)
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--d", type=int, default=12)
@@ -34,6 +34,13 @@ ap.add_argument("--folds", default="1995,2005,2015")
 ap.add_argument("--seed", type=int, default=0)
 ap.add_argument("--tag", default="")
 ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+ap.add_argument("--hidden", type=int, default=256)
+ap.add_argument("--depth", type=int, default=4)
+ap.add_argument("--activation", default="silu", choices=["silu", "relu", "gelu", "tanh"])
+ap.add_argument("--n_sde_steps", type=int, default=64)
+ap.add_argument("--val_years", type=float, default=3.0,
+                help="years immediately before each fold's training cutoff held out (excluded from the training "
+                     "ensemble) for in-fold checkpoint-selection validation pairs")
 args = ap.parse_args()
 torch.set_num_threads(args.threads)
 dev = torch.device(args.device)
@@ -144,6 +151,22 @@ def make_cases(baskets, ends):
     return torch.tensor(np.stack(cal), dtype=DT, device=dev), torch.tensor(np.stack(fwd), dtype=DT, device=dev), np.array(meta)
 
 
+def fold_val_pairs(val_start, val_end, rng, n_baskets=8):
+    """(calibration window, next-21-day window) pairs from a slice of time held out from training, used only for
+    in-fold checkpoint selection -- mirrors eeg_exp.py's held-out-subject validation split and make_cases'
+    (Cal, Fwd) structure, applied to a held-out *time slice* instead of held-out subjects since finance has no
+    natural subject axis. Returns None if the slice has too little data (short first fold)."""
+    lo = max(val_start - 2 * 252, 0)
+    cols = np.where(~np.isnan(R[lo:val_end]).any(0))[0]
+    if len(cols) < d:
+        return None, None, None
+    baskets = [np.sort(rng.choice(cols, d, replace=False)) for _ in range(n_baskets)]
+    ends = list(range(val_start + NW - 1, val_end - NF, 21))
+    if not ends:
+        return None, None, None
+    return make_cases(baskets, ends)
+
+
 def calibrate_neff(rng):
     tr_end = first_idx(1985); va_end = first_idx(1995)
     Ce_tr = train_tasks(tr_end, rng)
@@ -194,24 +217,64 @@ for fi, (y0, y1) in enumerate(fold_bounds):
     t0 = time.time()
     tr_end, te_end = first_idx(y0), min(first_idx(y1), T)
     frng = np.random.default_rng(args.seed + 10 * fi)
-    Ce_tr = train_tasks(tr_end, frng)
-    print(f"\n=== fold {fi}: train < {y0}, test {y0}-{y1-1}:  M={len(Ce_tr)} training covariances", flush=True)
+    val_start = max(tr_end - int(round(args.val_years * 252)), NW)
+    Ce_tr = train_tasks(val_start, frng)
+    print(f"\n=== fold {fi}: train < {y0}, test {y0}-{y1-1}:  M={len(Ce_tr)} training covariances "
+          f"(last {args.val_years:.0f}y before cutoff held out for validation)", flush=True)
     baskets, ends = test_paths(tr_end, te_end, frng)
     Cal, Fwd, meta = make_cases(baskets, ends)
     print(f"    test cases: {len(Cal)}", flush=True)
+    Cal_val, Fwd_val, meta_val = fold_val_pairs(val_start, tr_end, np.random.default_rng(args.seed + 10 * fi + 5))
+    print(f"    in-fold validation cases (held out from training): {0 if Cal_val is None else len(Cal_val)}", flush=True)
 
-    ck = f"results/{TAG}_fold{fi}.pt"
     cfg = SCSIConfig(N=N, d=d, kappa=1.0, n_outer=args.n_outer, steps_first=args.steps_first, steps_outer=args.steps_outer,
-                     seed=args.seed + fi, init="deconv", log_prior_inflate=1.5, threads=args.threads, n_recon=6, device=str(dev))
+                     seed=args.seed + fi, init="deconv", log_prior_inflate=1.5, threads=args.threads, n_recon=6, device=str(dev),
+                     hidden=args.hidden, depth=args.depth, activation=args.activation, n_sde_steps=args.n_sde_steps)
     model = SCSI(cfg)
-    if os.path.exists(ck):
-        Ye = S_.encode(Ce_tr, 0.0)
-        model.ema_net = Drift(S_.p, Ye.mean(0), Ye.std(0).clamp_min(1e-3), cfg.hidden, cfg.depth).to(dev)
-        model.ema_net.load_state_dict(torch.load(ck, map_location="cpu"))
-        print("    loaded", ck)
+    ck_dir = f"results/{TAG}_fold{fi}_ckpt"
+    os.makedirs(ck_dir, exist_ok=True)
+    CK = [k for k in (0, 2, 4, 6, 8, 10, 12, 15, 20, 25, 30) if k <= args.n_outer]
+
+    def _save_ckpt(net, k):
+        torch.save({"state": {kk: v.cpu() for kk, v in net.state_dict().items()},
+                    "mu": net.mu.cpu().clone(), "sd": net.sd.cpu().clone(),
+                    "hidden": args.hidden, "depth": args.depth, "activation": args.activation}, f"{ck_dir}/k{k}.pt")
+
+    val_curve, val_wc = {}, {}
+
+    def cb(m, k, Cal_val=Cal_val, Fwd_val=Fwd_val):
+        if k in CK:
+            _save_ckpt(m.ema_net, k)
+            if Cal_val is not None:
+                Cs = m.sample_posterior(Cal_val, 64)
+                val_curve[k] = float(posterior_predictive_logscore(Fwd_val, NfE, Cs).mean())
+                wc, ks = worst_case_pit_ks(Fwd_val, NfE, Cs, Cal_val)
+                val_wc[k] = wc
+                print(f"    [val] outer {k}: predictive log-score = {val_curve[k]:.3f}  worst_ks = {wc:.3f}  ("
+                      + ", ".join(f"{n}={v:.3f}" for n, v in ks.items()) + ")", flush=True)
+
+    val_json = f"results/{TAG}_fold{fi}_val.json"
+    have = all(os.path.exists(f"{ck_dir}/k{k}.pt") for k in CK) and os.path.exists(val_json)
+    if have:
+        dd = json.load(open(val_json))
+        val_curve = {int(k): v for k, v in dd["logscore"].items()}
+        val_wc = {int(k): v for k, v in dd["worst_ks"].items()}
+        print("    loaded cached checkpoints")
     else:
-        model.fit(Ce_tr)
-        torch.save({k: v.cpu() for k, v in model.ema_net.state_dict().items()}, ck)
+        model.fit(Ce_tr, callback=cb)
+        json.dump({"logscore": val_curve, "worst_ks": val_wc}, open(val_json, "w"))
+
+    kbest = min(val_wc, key=val_wc.get) if val_wc else max(CK)
+    zck = torch.load(f"{ck_dir}/k{kbest}.pt", map_location="cpu")
+    Ye = S_.encode(Ce_tr, 0.0)
+    model.ema_net = Drift(S_.p, Ye.mean(0), Ye.std(0).clamp_min(1e-3), zck.get("hidden", args.hidden),
+                          zck.get("depth", args.depth), activation=zck.get("activation", args.activation)).to(dev)
+    model.ema_net.load_state_dict(zck["state"])
+    if val_wc:
+        print(f"    selected outer iteration {kbest} by worst-case PIT-KS={val_wc[kbest]:.3f} "
+              f"(log-score would have picked {max(val_curve, key=val_curve.get)})", flush=True)
+    else:
+        print(f"    no in-fold validation data available; using last outer iteration {kbest}", flush=True)
     iw = IWPrior(Ce_tr, N, iters=600)
     g = torch.Generator(device=dev).manual_seed(100 + fi)
     D_si = model.sample_posterior(Cal, J, gen=g)
