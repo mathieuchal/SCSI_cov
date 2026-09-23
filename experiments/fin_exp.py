@@ -43,6 +43,9 @@ ap.add_argument("--val_years", type=float, default=3.0,
                      "ensemble) for in-fold checkpoint-selection validation pairs")
 ap.add_argument("--ck", default="0,2,4,6,8,10,12,15,20,25,30",
                 help="comma-separated outer iterations at which to checkpoint and validate")
+ap.add_argument("--force_ks", default=None,
+                help="comma-separated outer iteration to evaluate per fold (e.g. 6,2,6), from ALREADY-SAVED checkpoints; "
+                     "refuses to train, so it can never overwrite an existing run. Results get a _ks<...> suffix.")
 ap.add_argument("--no_select", action="store_true",
                 help="skip worst-case-PIT-KS checkpoint selection; always use the last outer iteration "
                      "(n_outer), i.e. train blindly the way the original code did")
@@ -51,6 +54,8 @@ torch.set_num_threads(args.threads)
 dev = torch.device(args.device)
 d, NW, NF, J = args.d, args.nw, args.nf, args.J
 TAG = f"fin_d{d}_nw{NW}_s{args.seed}{args.tag}"
+FORCE = None if args.force_ks is None else [int(x) for x in args.force_ks.split(",")]
+OUT = TAG + ("" if FORCE is None else "_ks" + "-".join(map(str, FORCE)))       # result files; checkpoints/val curves stay under TAG
 os.makedirs("results", exist_ok=True)
 print(f"device={dev}", flush=True)
 
@@ -266,10 +271,14 @@ for fi, (y0, y1) in enumerate(fold_bounds):
         val_wc = {int(k): v for k, v in dd["worst_ks"].items()}
         print("    loaded cached checkpoints")
     else:
+        if FORCE is not None:
+            raise SystemExit(f"--force_ks needs the saved checkpoints of {TAG} (fold {fi}); pass the same --ck/--n_outer/--tag as the original run. Not training.")
         model.fit(Ce_tr, callback=cb)
         json.dump({"logscore": val_curve, "worst_ks": val_wc}, open(val_json, "w"))
 
-    if args.no_select:
+    if FORCE is not None:
+        kbest = FORCE[fi]
+    elif args.no_select:
         kbest = args.n_outer
     else:
         kbest = min(val_wc, key=val_wc.get) if val_wc else max(CK)
@@ -278,7 +287,10 @@ for fi, (y0, y1) in enumerate(fold_bounds):
     model.ema_net = Drift(S_.p, Ye.mean(0), Ye.std(0).clamp_min(1e-3), zck.get("hidden", args.hidden),
                           zck.get("depth", args.depth), activation=zck.get("activation", args.activation)).to(dev)
     model.ema_net.load_state_dict(zck["state"])
-    if args.no_select:
+    if FORCE is not None:
+        print(f"    --force_ks: evaluating outer iteration {kbest} "
+              f"(worst-case PIT-KS over all functionals would have picked {min(val_wc, key=val_wc.get) if val_wc else 'n/a'})", flush=True)
+    elif args.no_select:
         print(f"    --no_select: using last outer iteration {kbest} unconditionally "
               f"(worst-case PIT-KS would have picked {min(val_wc, key=val_wc.get) if val_wc else 'n/a'})", flush=True)
     elif val_wc:
@@ -394,9 +406,9 @@ for k, v in pit_store.items():
     p = np.concatenate(v)
     results["coverage"][k] = coverage_from_pit(torch.tensor(p))
     print(f"{k:16s} coverage 50/80/95 = " + "/".join(f"{x:.3f}" for x in results['coverage'][k].values()))
-json.dump(results, open(f"results/{TAG}_results.json", "w"), indent=1, default=float)
-np.savez(f"results/{TAG}_arrays.npz", meta=meta_all, fold=fold_all, Kg=Kg, Kp=Kp, Kiw=Kiw, risk=np.concatenate(risk_store),
+json.dump(results, open(f"results/{OUT}_results.json", "w"), indent=1, default=float)
+np.savez(f"results/{OUT}_arrays.npz", meta=meta_all, fold=fold_all, Kg=Kg, Kp=Kp, Kiw=Kiw, risk=np.concatenate(risk_store),
          dates=dates.values.astype("datetime64[D]").astype(np.int64),
          **{f"var_{i}": var[n_] for i, n_ in enumerate(names)}, names=np.array(names),
          **{f"path{fi}_{k}": v for fi, rec in enumerate(path_records) for k, v in rec.items()})
-print("saved", TAG)
+print("saved", OUT)
