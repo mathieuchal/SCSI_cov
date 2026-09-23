@@ -41,6 +41,9 @@ ap.add_argument("--n_sde_steps", type=int, default=64)
 ap.add_argument("--val_years", type=float, default=3.0,
                 help="years immediately before each fold's training cutoff held out (excluded from the training "
                      "ensemble) for in-fold checkpoint-selection validation pairs")
+ap.add_argument("--no_select", action="store_true",
+                help="skip worst-case-PIT-KS checkpoint selection; always use the last outer iteration "
+                     "(n_outer), i.e. train blindly the way the original code did")
 args = ap.parse_args()
 torch.set_num_threads(args.threads)
 dev = torch.device(args.device)
@@ -264,13 +267,19 @@ for fi, (y0, y1) in enumerate(fold_bounds):
         model.fit(Ce_tr, callback=cb)
         json.dump({"logscore": val_curve, "worst_ks": val_wc}, open(val_json, "w"))
 
-    kbest = min(val_wc, key=val_wc.get) if val_wc else max(CK)
+    if args.no_select:
+        kbest = args.n_outer
+    else:
+        kbest = min(val_wc, key=val_wc.get) if val_wc else max(CK)
     zck = torch.load(f"{ck_dir}/k{kbest}.pt", map_location="cpu")
     Ye = S_.encode(Ce_tr, 0.0)
     model.ema_net = Drift(S_.p, Ye.mean(0), Ye.std(0).clamp_min(1e-3), zck.get("hidden", args.hidden),
                           zck.get("depth", args.depth), activation=zck.get("activation", args.activation)).to(dev)
     model.ema_net.load_state_dict(zck["state"])
-    if val_wc:
+    if args.no_select:
+        print(f"    --no_select: using last outer iteration {kbest} unconditionally "
+              f"(worst-case PIT-KS would have picked {min(val_wc, key=val_wc.get) if val_wc else 'n/a'})", flush=True)
+    elif val_wc:
         print(f"    selected outer iteration {kbest} by worst-case PIT-KS={val_wc[kbest]:.3f} "
               f"(log-score would have picked {max(val_curve, key=val_curve.get)})", flush=True)
     else:
