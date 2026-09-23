@@ -25,3 +25,4 @@ experiments/results/toys/first_pass/
 # scratch files
 *.bak
 *.tmp
+.DS_Store
