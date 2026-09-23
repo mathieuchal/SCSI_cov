@@ -233,8 +233,16 @@ def worst_case_pit_ks(Ce_val, N, Cs, Ce_cal, gen=None):
     eigenvector) that dominate the aggregate density fit -- see the iw_ri_d20 checkpoint sweeps. Selecting on
     the worst tracked functional instead avoids being blind to that trade-off.
 
-    Cs: (M,J,d,d) posterior draws conditioned on Ce_cal. Returns (worst_ks, {name: ks}). Lower is better."""
-    ks = {name: ks_unif(functional_pit(Ce_val, N, Cs, fn, gen=gen)[0].cpu().numpy()) for name, fn in _WC_FUNCS.items()}
+    Cs: (M,J,d,d) posterior draws conditioned on Ce_cal. Returns (worst_ks, {name: ks}). Lower is better.
+
+    N < d (the forward channel is under the ambient dimension, e.g. finance's deflated N_eff) makes every
+    Wishart(N,.) draw almost surely rank-deficient, so logdet/logcond are -inf/+inf for every simulated draw
+    regardless of the model -- their PIT collapses to a constant (KS=1 identically), which would make the
+    worst-case criterion uninformative rather than actually reflecting calibration. Both are dropped from the
+    functional set in that regime; top_share/corr01/ldv_top/ldv_bot don't need full rank and stay."""
+    d = Ce_val.shape[-1]
+    funcs = _WC_FUNCS if N >= d else {k: v for k, v in _WC_FUNCS.items() if k not in ("logdet", "logcond")}
+    ks = {name: ks_unif(functional_pit(Ce_val, N, Cs, fn, gen=gen)[0].cpu().numpy()) for name, fn in funcs.items()}
     _, V_cal = torch.linalg.eigh(Ce_cal)
     v_top, v_bot = V_cal[..., -1].unsqueeze(1), V_cal[..., 0].unsqueeze(1)
     ks["ldv_top"] = ks_unif(directional_pit(None, Ce_val, N, Cs, v_top, gen=gen)[0].squeeze(-1).cpu().numpy())
