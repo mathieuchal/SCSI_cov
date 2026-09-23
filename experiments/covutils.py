@@ -165,6 +165,24 @@ def directional_pit(vals, Cval, N, C_draws, dirs, gen=None, n_pred=1):
     return pit, pred, obs
 
 
+def functional_pit(Cval, N, C_draws, stat_fn, gen=None):
+    """PIT of an observed scalar functional stat_fn(Cval) under the posterior predictive law (draw C from the
+    posterior, then push through the known Wishart(N) channel) -- the eigenvalue-functional analogue of
+    directional_pit (which is for a fixed direction's quadratic form).  Ground-truth free: uses only Cval, N,
+    and posterior draws, exactly like directional_pit / posterior_predictive_logscore.
+
+    C_draws: (M,J,d,d) posterior draws conditioned on a companion observation (e.g. Ce_cal) sharing Cval's
+    latent covariance.  stat_fn: (...,d,d) -> (...), a functional of a covariance's own eigenvalues/entries
+    (e.g. logdet, log condition number, top-eigenvalue share, corr01) -- must NOT depend on an external
+    reference direction (use directional_pit for that).  Returns pit (M,), obs (M,), pred (M,J)."""
+    M, J, d, _ = C_draws.shape
+    Ce_pred = wishart_channel(C_draws.reshape(M * J, d, d), N, gen).reshape(M, J, d, d)
+    obs = stat_fn(Cval)
+    pred = stat_fn(Ce_pred.reshape(M * J, d, d)).reshape(M, J)
+    pit = (pred < obs.unsqueeze(-1)).to(DT).mean(-1) + 0.5 * (pred == obs.unsqueeze(-1)).to(DT).mean(-1)
+    return pit, obs, pred
+
+
 def coverage_from_pit(pit, levels=(0.5, 0.8, 0.95)):
     out = {}
     for lv in levels:
