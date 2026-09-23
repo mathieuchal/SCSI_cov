@@ -106,6 +106,7 @@ if __name__ == "__main__":
     ap.add_argument("--threads", type=int, default=2)
     ap.add_argument("--ref_only", action="store_true")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    ap.add_argument("--ckpt_k", type=int, default=None, help="evaluate a specific saved outer iteration ({toy}_k{K}.pt) instead of the validation-selected {toy}_model.pt")
     a = ap.parse_args()
     torch.set_num_threads(a.threads)
     dev = torch.device(a.device)
@@ -119,7 +120,8 @@ if __name__ == "__main__":
     if a.ref_only:
         raise SystemExit
     # ---- learners ---- #
-    model, kbest = load_scsi(toy, f"results/toys/{toy.name}_model.pt", a.threads, device=dev)
+    ckpt_path = f"results/toys/{toy.name}_model.pt" if a.ckpt_k is None else f"results/toys/{toy.name}_k{a.ckpt_k}.pt"
+    model, kbest = load_scsi(toy, ckpt_path, a.threads, device=dev)
     g = torch.Generator(device=dev).manual_seed(99)
     Cs_si = model.sample_posterior(Ce, a.J, gen=g)
     gg = torch.Generator(device=dev).manual_seed(1000)                                   # same training ensemble as toy_train.py
@@ -147,11 +149,12 @@ if __name__ == "__main__":
             ranks = (S[nm][s] < T[s][:, None]).mean(1)
             r[f"sbc_ks_{nm}"] = ks_unif(ranks)
         metrics[s] = r
+    suffix = "" if a.ckpt_k is None else f"_k{a.ckpt_k}"
     json.dump({"toy": toy.name, "d": toy.d, "N": toy.N, "M": toy.M, "kbest": kbest, "n_test": a.n_test, "n_ref": a.n_ref, "J": a.J,
-               "ref_diag": ref_diag, "metrics": metrics}, open(f"results/toys/{toy.name}_metrics.json", "w"), indent=1, default=float)
+               "ref_diag": ref_diag, "metrics": metrics}, open(f"results/toys/{toy.name}_metrics{suffix}.json", "w"), indent=1, default=float)
     arrs = {f"{nm}__{s}": S[nm][s].astype(np.float32) for nm in S for s in STATS}
     arrs.update({f"truth__{s}": T[s] for s in STATS}); arrs.update({f"scm__{s}": SCM[s] for s in STATS})
-    np.savez(f"results/toys/{toy.name}_stats.npz", **arrs)
+    np.savez(f"results/toys/{toy.name}_stats{suffix}.npz", **arrs)
     print(f"{'stat':12s} {'floor':>6s} | SC-SI: W1 sd-ratio bias  PITks | IW-fit: W1 sd-ratio bias PITks | SCM|z|  | SBC-KS ref/scsi/iw")
     for s in STATS:
         r = metrics[s]
