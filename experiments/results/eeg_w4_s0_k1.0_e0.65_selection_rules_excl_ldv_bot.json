@@ -1,0 +1,268 @@
+{
+ "note": "Per-functional PIT-KS curves parsed from the training logs of the two wide-net EEG runs (validation = held-out subjects, consecutive-window pairs, N=28). Re-selection uses the SAME trained checkpoints; only the selection rule changes. Downstream results at each pick are in the committed *_results.json / *_splithalf_k*.json of the named run tags.",
+ "rules": {
+  "logscore": "argmax validation log-score",
+  "worst_ks_all": "argmin over k of max KS over all 6 functionals",
+  "worst_ks_excl_ldv_bot": "argmin over k of max KS over the 5 functionals excluding ldv_bot"
+ },
+ "runs": {
+  "nominal_steps_outer_800": {
+   "tag": "eeg_w4_s0_k1.0_e0.65_wide_k30",
+   "curves": {
+    "0": {
+     "logscore": -501.3893,
+     "worst_ks": 0.41,
+     "ks": {
+      "logdet": 0.187,
+      "logcond": 0.41,
+      "top_share": 0.035,
+      "corr01": 0.062,
+      "ldv_top": 0.149,
+      "ldv_bot": 0.137
+     }
+    },
+    "2": {
+     "logscore": -496.3856,
+     "worst_ks": 0.292,
+     "ks": {
+      "logdet": 0.205,
+      "logcond": 0.292,
+      "top_share": 0.047,
+      "corr01": 0.06,
+      "ldv_top": 0.071,
+      "ldv_bot": 0.065
+     }
+    },
+    "5": {
+     "logscore": -494.0283,
+     "worst_ks": 0.205,
+     "ks": {
+      "logdet": 0.184,
+      "logcond": 0.205,
+      "top_share": 0.073,
+      "corr01": 0.063,
+      "ldv_top": 0.069,
+      "ldv_bot": 0.09
+     }
+    },
+    "8": {
+     "logscore": -493.5076,
+     "worst_ks": 0.191,
+     "ks": {
+      "logdet": 0.191,
+      "logcond": 0.157,
+      "top_share": 0.09,
+      "corr01": 0.07,
+      "ldv_top": 0.102,
+      "ldv_bot": 0.14
+     }
+    },
+    "12": {
+     "logscore": -493.8336,
+     "worst_ks": 0.194,
+     "ks": {
+      "logdet": 0.194,
+      "logcond": 0.129,
+      "top_share": 0.067,
+      "corr01": 0.049,
+      "ldv_top": 0.113,
+      "ldv_bot": 0.184
+     }
+    },
+    "16": {
+     "logscore": -494.1171,
+     "worst_ks": 0.22,
+     "ks": {
+      "logdet": 0.198,
+      "logcond": 0.13,
+      "top_share": 0.075,
+      "corr01": 0.062,
+      "ldv_top": 0.137,
+      "ldv_bot": 0.22
+     }
+    },
+    "20": {
+     "logscore": -494.5303,
+     "worst_ks": 0.234,
+     "ks": {
+      "logdet": 0.197,
+      "logcond": 0.105,
+      "top_share": 0.084,
+      "corr01": 0.085,
+      "ldv_top": 0.133,
+      "ldv_bot": 0.234
+     }
+    },
+    "25": {
+     "logscore": -494.7727,
+     "worst_ks": 0.262,
+     "ks": {
+      "logdet": 0.197,
+      "logcond": 0.093,
+      "top_share": 0.094,
+      "corr01": 0.078,
+      "ldv_top": 0.141,
+      "ldv_bot": 0.262
+     }
+    },
+    "30": {
+     "logscore": -494.7552,
+     "worst_ks": 0.277,
+     "ks": {
+      "logdet": 0.178,
+      "logcond": 0.076,
+      "top_share": 0.101,
+      "corr01": 0.074,
+      "ldv_top": 0.151,
+      "ldv_bot": 0.277
+     }
+    }
+   },
+   "worst_ks_excl_ldv_bot": {
+    "0": 0.41,
+    "2": 0.292,
+    "5": 0.205,
+    "8": 0.191,
+    "12": 0.194,
+    "16": 0.198,
+    "20": 0.197,
+    "25": 0.197,
+    "30": 0.178
+   },
+   "picks": {
+    "logscore": 8,
+    "worst_ks_all": 8,
+    "worst_ks_excl_ldv_bot": 30
+   }
+  },
+  "steps_outer_400": {
+   "tag": "eeg_w4_s0_k1.0_e0.65_wide_s400",
+   "curves": {
+    "0": {
+     "logscore": -501.3893,
+     "worst_ks": 0.41,
+     "ks": {
+      "logdet": 0.187,
+      "logcond": 0.41,
+      "top_share": 0.035,
+      "corr01": 0.062,
+      "ldv_top": 0.149,
+      "ldv_bot": 0.137
+     }
+    },
+    "2": {
+     "logscore": -498.4426,
+     "worst_ks": 0.345,
+     "ks": {
+      "logdet": 0.194,
+      "logcond": 0.345,
+      "top_share": 0.059,
+      "corr01": 0.071,
+      "ldv_top": 0.099,
+      "ldv_bot": 0.102
+     }
+    },
+    "5": {
+     "logscore": -495.754,
+     "worst_ks": 0.275,
+     "ks": {
+      "logdet": 0.182,
+      "logcond": 0.275,
+      "top_share": 0.055,
+      "corr01": 0.075,
+      "ldv_top": 0.067,
+      "ldv_bot": 0.054
+     }
+    },
+    "8": {
+     "logscore": -494.6615,
+     "worst_ks": 0.22,
+     "ks": {
+      "logdet": 0.19,
+      "logcond": 0.22,
+      "top_share": 0.066,
+      "corr01": 0.066,
+      "ldv_top": 0.069,
+      "ldv_bot": 0.078
+     }
+    },
+    "12": {
+     "logscore": -493.6435,
+     "worst_ks": 0.187,
+     "ks": {
+      "logdet": 0.187,
+      "logcond": 0.167,
+      "top_share": 0.089,
+      "corr01": 0.055,
+      "ldv_top": 0.077,
+      "ldv_bot": 0.14
+     }
+    },
+    "16": {
+     "logscore": -493.5842,
+     "worst_ks": 0.176,
+     "ks": {
+      "logdet": 0.176,
+      "logcond": 0.143,
+      "top_share": 0.082,
+      "corr01": 0.061,
+      "ldv_top": 0.094,
+      "ldv_bot": 0.143
+     }
+    },
+    "20": {
+     "logscore": -493.6008,
+     "worst_ks": 0.185,
+     "ks": {
+      "logdet": 0.183,
+      "logcond": 0.112,
+      "top_share": 0.082,
+      "corr01": 0.053,
+      "ldv_top": 0.115,
+      "ldv_bot": 0.185
+     }
+    },
+    "25": {
+     "logscore": -493.3047,
+     "worst_ks": 0.216,
+     "ks": {
+      "logdet": 0.175,
+      "logcond": 0.107,
+      "top_share": 0.083,
+      "corr01": 0.065,
+      "ldv_top": 0.117,
+      "ldv_bot": 0.216
+     }
+    },
+    "30": {
+     "logscore": -493.6559,
+     "worst_ks": 0.233,
+     "ks": {
+      "logdet": 0.191,
+      "logcond": 0.098,
+      "top_share": 0.083,
+      "corr01": 0.071,
+      "ldv_top": 0.11,
+      "ldv_bot": 0.233
+     }
+    }
+   },
+   "worst_ks_excl_ldv_bot": {
+    "0": 0.41,
+    "2": 0.345,
+    "5": 0.275,
+    "8": 0.22,
+    "12": 0.187,
+    "16": 0.176,
+    "20": 0.183,
+    "25": 0.175,
+    "30": 0.191
+   },
+   "picks": {
+    "logscore": 25,
+    "worst_ks_all": 16,
+    "worst_ks_excl_ldv_bot": 25
+   }
+  }
+ }
+}
