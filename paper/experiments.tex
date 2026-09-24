@@ -1,7 +1,7 @@
 % ---------------------------------------------------------------------------------------------------
 % Experiments section.  \input this file into the main paper.
 %   Packages: graphicx, booktabs, amsmath, amssymb, natbib (or adapt \citep).
-%   Figures : fig_real/fig_toy_logscore.pdf, fig_real/fig_toy_stats.pdf, fig_real/fig_eeg.png (7.4in wide raster), fig_real/fig_finance.pdf
+%   Figures : fig_real/fig_toy_logscore.pdf, fig_real/fig_toy_stats.pdf, fig_real/fig_eeg.png and fig_real/fig_finance.png (7.4in wide rasters)
 %             (regenerate with experiments/paper_figs.py)
 %   Labels expected from the appendix: app:toys, app:eeg, app:finance, app:selection.
 %   Citation keys used (rename to your .bib): chen2010shrinkage, ledoit2020analytical, gavish2014optimal,
@@ -170,12 +170,12 @@ We made this choice after inspecting validation curves; Appendix~\ref{app:select
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\linewidth]{fig_real/fig_finance.pdf}
+  \includegraphics[width=\linewidth]{fig_real/fig_finance.png}
   \caption{\textbf{Financial returns, 1995--2026.}
-  (a)~Out-of-sample minimum-variance portfolio: mean log ratio of realised 21-day variance to OAS with 95\% month-block bootstrap intervals (left is lower risk).
+  (a)~Out-of-sample minimum-variance portfolio: mean log ratio of realised 21-day variance to OAS with 95\% month-block bootstrap intervals (left is lower risk; PCA: number of factors by the Gavish--Donoho threshold).
   (b)~12-month rolling coverage of the central 80\% forward interval for the variances of the 12 assets and the equal-weight portfolio.
   (c)~12-month rolling forward predictive log-score gain over the sample covariance.
-  Shaded: top tercile of trailing market volatility; dotted: model refits (2005, 2015).
+  Shaded: dot-com bust, global financial crisis and COVID; dotted: model refits (2005, 2015).
   All quantities are averaged over the 8 baskets of a month.}
   \label{fig:finance}
 \end{figure}
@@ -185,7 +185,7 @@ We made this choice after inspecting validation curves; Appendix~\ref{app:select
 Using the \scsi{} posterior mean as the covariance input lowers realised variance by $3.4\%$ relative to OAS (log ratio $-0.034$, 95\% CI $[-0.043,-0.026]$; annualised volatility $14.12\%$ vs.\ $14.36\%$), and the Stein-optimal covariance is close ($-0.032$; Fig.~\ref{fig:finance}a).
 Every other estimator is at or above OAS: the IW-ML posterior mean ($+0.004$, not significant), LW-NLS ($+0.034$) and the sample covariance ($+0.095$).
 The advantage is steady rather than driven by a few episodes: it holds in each volatility tercile ($-0.051$, $-0.022$, $-0.030$ from low to high; Appendix~\ref{app:finance}).
-Using the posterior to pick the number of factors does not help: PCA with the \scsi{} Bayes rule is $+0.086$ above OAS, better than Gavish--Donoho ($+0.129$) or the IW-ML Bayes rule ($+0.119$) but far from the posterior mean.
+Using the posterior to pick the number of factors does not help: PCA with the \scsi{} Bayes rule is $+0.086$ above OAS (not shown), better than Gavish--Donoho ($+0.129$) or the IW-ML Bayes rule ($+0.119$) but far from the posterior mean.
 The value lies in using the whole posterior, not in a hard rank decision.
 \textbf{Calibration degrades in stress, less so for posterior-based laws.}
 The 80\% coverage of forward variances falls for every method in the global financial crisis and in COVID (Fig.~\ref{fig:finance}b).
