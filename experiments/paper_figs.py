@@ -165,7 +165,7 @@ def fig_finance():
             a0.text(max(res["mv"][n]["log_var_ratio_vs_OAS"][2] + 0.006, 0.009), y, f"{res['mv'][n]['ann_vol']:.2f}%", ha="left", va="center", fontsize=7.4, color=INK2, path_effects=halo)
         a0.set_xlim(-0.055, 0.205); a0.set_ylim(-0.6, len(order) - 0.4); a0.set_xticks([-0.05, 0, 0.05, 0.10, 0.15])
         a0.set_yticks(ys); a0.set_yticklabels([label[n] for n in order], fontsize=7.4); a0.grid(axis="y", visible=False)
-        a0.set_xlabel("mean log(realised var. / OAS)"); a0.set_title("(a) Min-variance portfolio", loc="left")
+        a0.set_xlabel("mean log(realised var. / OAS)"); a0.set_title("(a) Min-variance portfolio", loc="center")
         for a in (a1, a2):
             for _, d0, d1 in crises:
                 a.axvspan(np.datetime64(d0), np.datetime64(d1), color="#dcdcda", alpha=0.7, lw=0, zorder=0)
@@ -176,10 +176,10 @@ def fig_finance():
         a1.axhline(0.8, color=INK, lw=0.9, ls=(0, (4, 2))); a1.set_ylim(0.45, 1.06); a1.set_yticks([0.6, 0.8, 1.0]); a1.set_ylabel("coverage")
         for lab, d0, d1 in crises:
             a1.text(np.datetime64(d0) + (np.datetime64(d1) - np.datetime64(d0)) // 2, 1.045, lab, ha="center", va="top", fontsize=6.6, color=INK2)
-        a1.set_title("(b) 80% interval coverage of forward variances", loc="left"); plt.setp(a1.get_xticklabels(), visible=False)
+        a1.set_title("(b) 80% interval coverage of forward variances", loc="center"); plt.setp(a1.get_xticklabels(), visible=False)
         for n, c, lw in (("LW_nonlinear_shrinkage", YELLOW, 0.7), ("OAS_shrinkage", AQUA, 0.7), ("IW", ORANGE, 0.8), ("SC-SI", BLUE, 1.25)):
             a2.plot(t, gain[n], color=c, lw=lw)
-        a2.axhline(0, color=GRAY, lw=0.8); a2.set_ylabel("nats"); a2.set_title("(c) Forward log-score gain vs sample cov. (nats / window)", loc="left")
+        a2.axhline(0, color=GRAY, lw=0.8); a2.set_ylabel("nats"); a2.set_title("(c) Log-score gain vs sample cov. (nats / window)", loc="center")
         a2.set_xlim(t[0] - np.timedelta64(20, "D"), t[-1] + np.timedelta64(20, "D")); a2.xaxis.set_major_locator(mdates.YearLocator(5)); a2.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
         h = [plt.Line2D([], [], color=c, lw=3.5) for c in (GRAY, AQUA, YELLOW, ORANGE, BLUE)]
         fig.legend(h, ["sample cov.", "OAS", "LW-NLS", "IW conj", "SC-SI"], loc="lower center", ncol=5, bbox_to_anchor=(0.5, 0.0), columnspacing=1.6, handlelength=1.4)
