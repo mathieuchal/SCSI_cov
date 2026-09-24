@@ -1,4 +1,4 @@
-"""Camera-ready figures for the experiments section (vector PDF, sized for one text-width column) -> ../paper/figs/.
+"""Camera-ready figures for the experiments section (vector PDF, sized for one text-width column) -> ../paper/fig_real/.
 
   fig_toy_logscore : validation log-score gap to the oracle vs EM iteration, three d=8 toys
   fig_toy_stats    : posterior of six statistics at a *median-error* test task, three d=8 toys
@@ -18,7 +18,7 @@ from toy_eval import STATS, w1_norm
 setup()
 plt.rcParams.update({"font.size": 7, "axes.titlesize": 7.4, "axes.labelsize": 7, "xtick.labelsize": 6, "ytick.labelsize": 6,
                      "legend.fontsize": 6.2, "pdf.fonttype": 42, "axes.titlelocation": "left", "lines.linewidth": 1.4})
-PDF, PNG = "../paper/figs", "figs/paper"
+PDF, PNG = "../paper/fig_real", "figs/paper"
 os.makedirs(PDF, exist_ok=True); os.makedirs(PNG, exist_ok=True)
 EEG_TAG = "eeg_w4_s0_k1.0_e0.65"
 FIN_TAG = "fin_d12_nw63_s0_wcsel_wide_k30_ks6-2-6"

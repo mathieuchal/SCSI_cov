@@ -1,7 +1,7 @@
 % ---------------------------------------------------------------------------------------------------
 % Experiments section.  \input this file into the main paper.
 %   Packages: graphicx, booktabs, amsmath, amssymb, natbib (or adapt \citep).
-%   Figures : figs/fig_toy_logscore.pdf, figs/fig_toy_stats.pdf, figs/fig_eeg.png (7.4in wide raster), figs/fig_finance.pdf
+%   Figures : fig_real/fig_toy_logscore.pdf, fig_real/fig_toy_stats.pdf, fig_real/fig_eeg.png (7.4in wide raster), fig_real/fig_finance.pdf
 %             (regenerate with experiments/paper_figs.py)
 %   Labels expected from the appendix: app:toys, app:eeg, app:finance, app:selection.
 %   Citation keys used (rename to your .bib): chen2010shrinkage, ledoit2020analytical, gavish2014optimal,
@@ -41,7 +41,7 @@ We report (a)~the held-out predictive log-score of $\Ce^{\mathrm{val}}$ given $\
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\linewidth]{figs/fig_toy_logscore.pdf}
+  \includegraphics[width=\linewidth]{fig_real/fig_toy_logscore.pdf}
   \caption{\textbf{Self-consistent training approaches the oracle.}
   Held-out predictive log-score relative to the oracle posterior (300 validation pairs, nats per task) along EM iterations $k$; $k{=}0$ is the deconvolved log-Gaussian initialisation.
   Dashed: IW-ML.
@@ -59,7 +59,7 @@ On the factor model the ordering flips: IW-ML sits 5.0 nats below the oracle and
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\linewidth]{figs/fig_toy_stats.pdf}
+  \includegraphics[width=\linewidth]{fig_real/fig_toy_stats.pdf}
   \caption{\textbf{Posterior of six statistics of $C$ on the three toy priors.}
   Draws for the test task with median error (median over 128 tasks of the mean $W_1$ across statistics), not selected for appearance; dashed line: true value.
   Aggregate distances over all 128 tasks are in Table~\ref{tab:toy-w1}.}
@@ -117,7 +117,7 @@ We report the predictive log-score, the coverage of central predictive intervals
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\linewidth]{figs/fig_eeg.png}
+  \includegraphics[width=\linewidth]{fig_real/fig_eeg.png}
   \caption{\textbf{EEG on held-out subjects.}
   (a)~Predictive log-score gain over the sample covariance with 95\% subject-level bootstrap intervals; filled: split-half, hollow: next window.
   (b)~Coverage of the central 80\% predictive interval (dashed: nominal) for directional variances (channel axes and top pooled PCs) and four functionals of $C$ (log-determinant, log power at Oz, top-eigenvalue share, log condition number), split-half.
@@ -167,7 +167,7 @@ We made this choice after inspecting validation curves; Appendix~\ref{app:select
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\linewidth]{figs/fig_finance.pdf}
+  \includegraphics[width=\linewidth]{fig_real/fig_finance.pdf}
   \caption{\textbf{Financial returns, 1995--2026.}
   (a)~Out-of-sample minimum-variance portfolio: mean log ratio of realised 21-day variance to OAS with 95\% month-block bootstrap intervals (left is lower risk).
   (b)~12-month rolling coverage of the central 80\% forward interval for the variances of the 12 assets and the equal-weight portfolio.
