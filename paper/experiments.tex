@@ -1,7 +1,7 @@
 % ---------------------------------------------------------------------------------------------------
 % Experiments section.  \input this file into the main paper.
 %   Packages: graphicx, booktabs, amsmath, amssymb, natbib (or adapt \citep).
-%   Figures : figs/fig_toy_logscore.pdf, figs/fig_toy_stats.pdf, figs/fig_eeg.pdf, figs/fig_finance.pdf
+%   Figures : figs/fig_toy_logscore.pdf, figs/fig_toy_stats.pdf, figs/fig_eeg.png (7.4in wide raster), figs/fig_finance.pdf
 %             (regenerate with experiments/paper_figs.py)
 %   Labels expected from the appendix: app:toys, app:eeg, app:finance, app:selection.
 %   Citation keys used (rename to your .bib): chen2010shrinkage, ledoit2020analytical, gavish2014optimal,
@@ -117,7 +117,7 @@ We report the predictive log-score, the coverage of central predictive intervals
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\linewidth]{figs/fig_eeg.pdf}
+  \includegraphics[width=\linewidth]{figs/fig_eeg.png}
   \caption{\textbf{EEG on held-out subjects.}
   (a)~Predictive log-score gain over the sample covariance with 95\% subject-level bootstrap intervals; filled: split-half, hollow: next window.
   (b)~Coverage of the central 80\% predictive interval (dashed: nominal) for directional variances (channel axes and top pooled PCs) and four functionals of $C$ (log-determinant, log power at Oz, top-eigenvalue share, log condition number), split-half.

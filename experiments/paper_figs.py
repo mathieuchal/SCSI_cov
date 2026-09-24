@@ -2,7 +2,7 @@
 
   fig_toy_logscore : validation log-score gap to the oracle vs EM iteration, three d=8 toys
   fig_toy_stats    : posterior of six statistics at a *median-error* test task, three d=8 toys
-  fig_eeg          : (a) log-score gain, (b) 80% coverage per metric, (c) selective classification
+  fig_eeg          : (a) log-score gain, (b) 80% coverage per metric, (c) selective classification   [PNG, 7.4 in wide]
   fig_finance      : (a) min-variance ratio vs OAS, (b) calibration through time, (c) log-score gain through time
 
 All inputs are committed result files (results/*.json) plus the per-case arrays (gitignored) they were derived from.
@@ -26,7 +26,9 @@ HI = "#eb6834"
 LIGHT_BLUE, LIGHT_ORANGE = "#79aee8", "#f2a88e"
 
 
-def save(fig, name):
+def save(fig, name, fmt="pdf"):
+    if fmt == "png":                                                             # raster-only figure, shipped as PNG (no PDF, no preview copy)
+        fig.savefig(f"{PDF}/{name}.png", dpi=300, bbox_inches="tight"); plt.close(fig); print("wrote", f"{PDF}/{name}.png"); return
     fig.savefig(f"{PDF}/{name}.pdf", bbox_inches="tight"); fig.savefig(f"{PNG}/{name}.png", dpi=200, bbox_inches="tight"); plt.close(fig)
     print("wrote", f"{PDF}/{name}.pdf")
 
@@ -88,45 +90,48 @@ def fig_toy_stats():
 
 # ------------------------------------------------------------------------------------------------ EEG
 def fig_eeg():
+    """Wider than the other figures (7.4 in) so that the three panels are individually readable; PNG output."""
     nw = json.load(open(f"results/{EEG_TAG}_wide_k30_k8_results.json")); sh = json.load(open(f"results/{EEG_TAG}_wide_k30_splithalf_k8.json"))
     arr = np.load(f"results/{EEG_TAG}_wide_k30_k8_arrays.npz", allow_pickle=True)
     M = {"Sample cov.": ("sample cov.", GRAY), "Linear shrinkage (OAS)": ("OAS", AQUA), "Nonlinear shrinkage (LW)": ("LW-NLS", YELLOW),
-         "IW conjugate (ML-fitted)": ("IW conjugate", ORANGE), "SC-SI (ours)": ("SC-SI", BLUE)}
-    fig = plt.figure(figsize=(5.6, 1.8)); gs = fig.add_gridspec(1, 3, width_ratios=[0.85, 1.55, 0.95], wspace=0.55)
-    a0, a1, a2 = (fig.add_subplot(gs[0, k]) for k in range(3))
-    # (a) log-score gain vs sample covariance
-    names = ["Linear shrinkage (OAS)", "Nonlinear shrinkage (LW)", "IW conjugate (ML-fitted)", "SC-SI (ours)"]; ys = np.arange(len(names))[::-1] * 1.0
-    for y, n in zip(ys, names):
-        g, lo, hi = sh["logscore"][n]["gain"]; c = M[n][1]
-        a0.plot([lo, hi], [y + 0.16] * 2, color=c, lw=1.5, solid_capstyle="round"); a0.plot(g, y + 0.16, "o", color=c, ms=3.8, mec=SURFACE, mew=0.6)
-        g2, lo2, hi2 = nw["methods"][n]["gain_vs_scm"], *nw["methods"][n]["gain_ci"]
-        a0.plot([lo2, hi2], [y - 0.16] * 2, color=c, lw=1.5, alpha=0.5, solid_capstyle="round"); a0.plot(g2, y - 0.16, "o", mfc=SURFACE, mec=c, mew=1.1, ms=3.8)
-    a0.axvline(0, color=INK3, lw=0.9); a0.set_yticks(ys); a0.set_yticklabels([M[n][0] for n in names]); a0.grid(axis="y", visible=False)
-    a0.set_xlabel("nats / window"); a0.set_title("(a) Log-score gain", loc="left")
-    a0.set_xlim(-25, 24)
-    # (b) coverage of the central 80% interval, per metric (split-half)
-    groups = [("dir.\nvar.", lambda m: sh["dir_cov"][m]["0.8"]), ("log\ndet", lambda m: sh["functional"]["log det C"][m]["cov"]["0.8"]),
-              ("log\nOz", lambda m: sh["functional"]["log C[Oz,Oz]"][m]["cov"]["0.8"]), ("top\nshare", lambda m: sh["functional"]["top-eigenvalue share"][m]["cov"]["0.8"]),
-              ("log\ncond.", lambda m: sh["functional"]["log cond. number"][m]["cov"]["0.8"])]
-    xs = np.arange(len(groups)); wb = 0.16
-    for j, m in enumerate(M):
-        a1.bar(xs + (j - 2) * wb, [g[1](m) for g in groups], wb * 0.92, color=M[m][1])
-    a1.axhline(0.8, color=INK, lw=1.2, ls=(0, (4, 2))); a1.set_ylim(0, 1.0)
-    a1.set_xticks(xs); a1.set_xticklabels([g[0] for g in groups], fontsize=5.8); a1.grid(axis="x", visible=False)
-    a1.set_ylabel("80% coverage"); a1.set_title("(b) Calibration, split-half", loc="left")
-    # (c) selective classification, eyes open vs closed
-    prob, pn, y = arr["prob"], list(arr["prob_names"]), arr["te_y"]
-    pick = {"SCM -> LR (plug-in)": ("sample cov.", GRAY), "OAS -> LR (plug-in)": ("OAS", AQUA), "NLS -> LR (plug-in)": ("LW-NLS", YELLOW),
-            "Posterior-trained LR, posterior-averaged (ours)": ("SC-SI", BLUE)}
-    fr = np.linspace(0.2, 1.0, 33)
-    for n, (lab, c) in pick.items():
-        p = prob[pn.index(n)]; o = np.argsort(-np.abs(p - 0.5))
-        a2.plot(fr, [((p[o[:max(int(f * len(p)), 1)]] > 0.5).astype(int) == y[o[:max(int(f * len(p)), 1)]]).mean() for f in fr], color=c, lw=1.5 if lab == "SC-SI" else 1.1)
-    a2.set_xlabel("fraction kept (confident first)"); a2.set_ylabel("accuracy on kept"); a2.set_title("(c) Open vs closed", loc="left")
-    a2.set_xlim(0.2, 1.0)
-    h = [plt.Line2D([], [], color=c, lw=3) for (_, c) in M.values()]
-    fig.legend(h, [v[0] for v in M.values()], loc="lower center", ncol=5, bbox_to_anchor=(0.5, -0.17), columnspacing=1.2, handlelength=1.3)
-    save(fig, "fig_eeg")
+         "IW conjugate (ML-fitted)": ("IW conj", ORANGE), "SC-SI (ours)": ("SC-SI", BLUE)}
+    rc = {"font.size": 8.5, "axes.titlesize": 9, "axes.titleweight": "normal", "axes.labelsize": 8.5, "xtick.labelsize": 8, "ytick.labelsize": 8, "legend.fontsize": 8.5}
+    with plt.rc_context(rc):
+        fig = plt.figure(figsize=(7.4, 2.4)); gs = fig.add_gridspec(1, 3, width_ratios=[0.98, 1.38, 1.05], wspace=0.5, left=0.06, right=0.995, top=0.9, bottom=0.34)
+        a0, a1, a2 = (fig.add_subplot(gs[0, k]) for k in range(3))
+        # (a) log-score gain vs sample covariance
+        names = ["Linear shrinkage (OAS)", "Nonlinear shrinkage (LW)", "IW conjugate (ML-fitted)", "SC-SI (ours)"]; ys = np.arange(len(names))[::-1] * 1.0
+        for y, n in zip(ys, names):
+            g, lo, hi = sh["logscore"][n]["gain"]; c = M[n][1]
+            a0.plot([lo, hi], [y + 0.16] * 2, color=c, lw=1.8, solid_capstyle="round"); a0.plot(g, y + 0.16, "o", color=c, ms=4.6, mec=SURFACE, mew=0.7)
+            g2, lo2, hi2 = nw["methods"][n]["gain_vs_scm"], *nw["methods"][n]["gain_ci"]
+            a0.plot([lo2, hi2], [y - 0.16] * 2, color=c, lw=1.8, alpha=0.5, solid_capstyle="round"); a0.plot(g2, y - 0.16, "o", mfc=SURFACE, mec=c, mew=1.3, ms=4.6)
+        a0.axvline(0, color=INK3, lw=0.9); a0.set_yticks(ys); a0.set_yticklabels([M[n][0] for n in names], rotation=90, va="center", fontsize=6.3); a0.grid(axis="y", visible=False)
+        a0.set_xlabel("nats / window"); a0.set_title("(a) Log-score gain", loc="left"); a0.set_xlim(-25, 42)
+        a0.plot([], [], "o", color=INK2, ms=4.2, label="split-half"); a0.plot([], [], "o", mfc=SURFACE, mec=INK2, mew=1.2, ms=4.2, label="next window")
+        a0.legend(loc="upper right", fontsize=6.3, frameon=False, borderaxespad=0.1, handletextpad=0.2, labelspacing=0.25)
+        # (b) coverage of the central 80% interval, per metric (split-half)
+        groups = [("dir.\nvar.", lambda m: sh["dir_cov"][m]["0.8"]), ("log\ndet", lambda m: sh["functional"]["log det C"][m]["cov"]["0.8"]),
+                  ("log\nOz", lambda m: sh["functional"]["log C[Oz,Oz]"][m]["cov"]["0.8"]), ("top\nshare", lambda m: sh["functional"]["top-eigenvalue share"][m]["cov"]["0.8"]),
+                  ("log\ncond.", lambda m: sh["functional"]["log cond. number"][m]["cov"]["0.8"])]
+        xs = np.arange(len(groups)); wb = 0.16
+        for j, m in enumerate(M):
+            a1.bar(xs + (j - 2) * wb, [g[1](m) for g in groups], wb * 0.92, color=M[m][1])
+        a1.axhline(0.8, color=INK, lw=1.3, ls=(0, (4, 2))); a1.set_ylim(0, 1.0)
+        a1.set_xticks(xs); a1.set_xticklabels([g[0] for g in groups]); a1.grid(axis="x", visible=False)
+        a1.set_ylabel("80% coverage"); a1.set_title("(b) Calibration, split-half", loc="left")
+        # (c) selective classification, eyes open vs closed
+        prob, pn, y = arr["prob"], list(arr["prob_names"]), arr["te_y"]
+        pick = {"SCM -> LR (plug-in)": ("sample cov.", GRAY), "OAS -> LR (plug-in)": ("OAS", AQUA), "NLS -> LR (plug-in)": ("LW-NLS", YELLOW),
+                "Posterior-trained LR, posterior-averaged (ours)": ("SC-SI", BLUE)}
+        fr = np.linspace(0.2, 1.0, 33)
+        for n, (lab, c) in pick.items():
+            p = prob[pn.index(n)]; o = np.argsort(-np.abs(p - 0.5))
+            a2.plot(fr, [((p[o[:max(int(f * len(p)), 1)]] > 0.5).astype(int) == y[o[:max(int(f * len(p)), 1)]]).mean() for f in fr], color=c, lw=1.9 if lab == "SC-SI" else 1.3)
+        a2.set_xlabel("fraction kept (confident first)"); a2.set_ylabel("accuracy on kept"); a2.set_title("(c) Open vs closed", loc="left"); a2.set_xlim(0.2, 1.0)
+        h = [plt.Line2D([], [], color=c, lw=3.5) for (_, c) in M.values()]
+        fig.legend(h, [v[0] for v in M.values()], loc="lower center", ncol=5, bbox_to_anchor=(0.5, 0.0), columnspacing=1.6, handlelength=1.4)
+        save(fig, "fig_eeg", fmt="png")
 
 
 # ------------------------------------------------------------------------------------------------ finance
