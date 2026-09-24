@@ -29,6 +29,9 @@ ap.add_argument("--tag", default="")
 ap.add_argument("--retrain", action="store_true")
 ap.add_argument("--hidden", type=int, default=256)
 ap.add_argument("--depth", type=int, default=4)
+ap.add_argument("--cv_folds", type=int, default=0, help="if > 0: subject-disjoint K-fold CV over ALL subjects; this run tests on fold --cv_fold")
+ap.add_argument("--cv_fold", type=int, default=0)
+ap.add_argument("--select", default="logscore", choices=["logscore", "worstks"], help="rule used to pick the checkpoint when --force_k is not given")
 ap.add_argument("--force_k", type=int, default=None,
                 help="evaluate this saved outer iteration instead of the validation-selected one (no stopping criterion)")
 ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -54,6 +57,11 @@ rng = np.random.default_rng(args.seed)
 perm = rng.permutation(Sn)
 n_tr, n_va = int(0.65 * Sn), int(0.10 * Sn)
 tr, va, te = perm[:n_tr], perm[n_tr:n_tr + n_va], perm[n_tr + n_va:]
+if args.cv_folds > 0:                                   # K-fold CV: every subject is a test subject exactly once
+    folds = np.array_split(perm, args.cv_folds)
+    te = folds[args.cv_fold]
+    rest = np.concatenate([folds[i] for i in range(args.cv_folds) if i != args.cv_fold])
+    va, tr = rest[:n_va], rest[n_va:]
 print(f"split subjects: train={len(tr)} val={len(va)} test={len(te)}")
 Ce_train = scm_win[tr].reshape(-1, d, d)                # unlabeled pool of noisy covariances, both conditions
 print("training ensemble M =", Ce_train.shape[0])
@@ -126,11 +134,11 @@ else:
 
 kbest_ls = max(val_curve, key=val_curve.get)
 kbest_wc = min(val_wc, key=val_wc.get) if val_wc else None
-kbest = args.force_k if args.force_k is not None else kbest_ls
+kbest = args.force_k if args.force_k is not None else (kbest_wc if (args.select == "worstks" and kbest_wc is not None) else kbest_ls)
 print("validation curve:", {k: round(v, 3) for k, v in val_curve.items()})
 print("worst-case PIT-KS curve:", {k: round(v, 3) for k, v in val_wc.items()})
 print(f"log-score would pick k={kbest_ls}; worst-case PIT-KS would pick k={kbest_wc}; "
-      + (f"--force_k: evaluating k={kbest}" if args.force_k is not None else f"evaluating k={kbest} (log-score)"), flush=True)
+      + (f"--force_k: evaluating k={kbest}" if args.force_k is not None else f"evaluating k={kbest} ({args.select})"), flush=True)
 _load_ckpt(model.ema_net, f"{ck_dir}/k{kbest}.pt")
 
 iw = IWPrior(Ce_train, N, iters=800)
