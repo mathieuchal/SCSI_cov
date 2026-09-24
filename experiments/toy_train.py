@@ -28,11 +28,13 @@ ap.add_argument("--hidden", type=int, default=256)
 ap.add_argument("--depth", type=int, default=4)
 ap.add_argument("--activation", default="silu", choices=["silu", "relu", "gelu", "tanh"])
 ap.add_argument("--n_recon", type=int, default=8, help="reconstructions per training-set covariance per outer iteration (bank size = M * n_recon)")
+ap.add_argument("--tag", default="", help="suffix for this run's output files (train/model/checkpoints), to keep several training variants of one toy")
 ap.add_argument("--n_sde_steps", type=int, default=64, help="Follmer SDE integration steps, used both for E-step reconstruction during EM and (via the checkpoint) at eval time")
 a = ap.parse_args()
 torch.set_num_threads(a.threads)
 dev = torch.device(a.device)
 toy = make_toy(a.toy, device=dev)
+stem = toy.name + (f"_{a.tag}" if a.tag else "")
 d, N = toy.d, toy.N
 g = torch.Generator(device=dev).manual_seed(1000 + a.seed)
 C_tr = toy.sample_prior(toy.M, g); Ce_tr = wishart_channel(C_tr, N, g)                    # the ONLY training data: noisy Ce
@@ -66,16 +68,16 @@ def cb(m, k):
         val_wc[k] = wc
         print(f"   [val] outer {k}: predictive log-score = {val[k]:.3f}  worst_ks = {wc:.3f}  ("
               + ", ".join(f"{n}={v:.3f}" for n, v in ks.items()) + ")", flush=True)
-        _save(m.ema_net, k, f"results/toys/{toy.name}_k{k}.pt")   # every checkpoint (trajectory analysis)
+        _save(m.ema_net, k, f"results/toys/{stem}_k{k}.pt")   # every checkpoint (trajectory analysis)
         if wc < best[1]:
             best = (k, wc)
-            _save(m.ema_net, k, f"results/toys/{toy.name}_model.pt")
+            _save(m.ema_net, k, f"results/toys/{stem}_model.pt")
 
 t0 = time.time()
 model.fit(Ce_tr, callback=cb)
 json.dump({"val_curve": val, "val_curve_worst_ks": val_wc, "best_k": best[0], "fit_sec": time.time() - t0,
           "M": toy.M, "N": N, "d": d, "hidden": a.hidden, "depth": a.depth, "activation": a.activation,
           "n_recon": a.n_recon, "n_sde_steps": a.n_sde_steps},
-          open(f"results/toys/{toy.name}_train.json", "w"), indent=1)
+          open(f"results/toys/{stem}_train.json", "w"), indent=1)
 print(f"{toy.name}: selected outer iteration {best[0]} by worst-case PIT-KS={best[1]:.3f}  "
       f"(val curve {val})  fit {time.time()-t0:.0f}s")

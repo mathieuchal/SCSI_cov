@@ -99,6 +99,7 @@ if __name__ == "__main__":
     ap.add_argument("--n_ref", type=int, default=2048)
     ap.add_argument("--J", type=int, default=1024)
     ap.add_argument("--threads", type=int, default=2)
+    ap.add_argument("--tag", default="", help="evaluate the training variant saved with toy_train.py --tag")
     ap.add_argument("--ref_only", action="store_true")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     ap.add_argument("--ckpt_k", type=int, default=None, help="evaluate a specific saved outer iteration ({toy}_k{K}.pt) instead of the validation-selected {toy}_model.pt")
@@ -106,6 +107,7 @@ if __name__ == "__main__":
     torch.set_num_threads(a.threads)
     dev = torch.device(a.device)
     toy = make_toy(a.toy, device=dev)
+    stem = toy.name + (f"_{a.tag}" if a.tag else "")
     os.makedirs("results/toys", exist_ok=True)
     C_true, Ce = make_testset(toy, a.n_test)
     ref_C, ref_diag = get_reference(toy, Ce, a.n_ref, f"results/toys/{toy.name}_ref.pt")
@@ -115,7 +117,7 @@ if __name__ == "__main__":
     if a.ref_only:
         raise SystemExit
     # ---- learners ---- #
-    ckpt_path = f"results/toys/{toy.name}_model.pt" if a.ckpt_k is None else f"results/toys/{toy.name}_k{a.ckpt_k}.pt"
+    ckpt_path = f"results/toys/{stem}_model.pt" if a.ckpt_k is None else f"results/toys/{stem}_k{a.ckpt_k}.pt"
     model, kbest = load_scsi(toy, ckpt_path, a.threads, device=dev)
     g = torch.Generator(device=dev).manual_seed(99)
     Cs_si = model.sample_posterior(Ce, a.J, gen=g)
@@ -146,10 +148,10 @@ if __name__ == "__main__":
         metrics[s] = r
     suffix = "" if a.ckpt_k is None else f"_k{a.ckpt_k}"
     json.dump({"toy": toy.name, "d": toy.d, "N": toy.N, "M": toy.M, "kbest": kbest, "n_test": a.n_test, "n_ref": a.n_ref, "J": a.J,
-               "ref_diag": ref_diag, "metrics": metrics}, open(f"results/toys/{toy.name}_metrics{suffix}.json", "w"), indent=1, default=float)
+               "ref_diag": ref_diag, "metrics": metrics}, open(f"results/toys/{stem}_metrics{suffix}.json", "w"), indent=1, default=float)
     arrs = {f"{nm}__{s}": S[nm][s].astype(np.float32) for nm in S for s in STATS}
     arrs.update({f"truth__{s}": T[s] for s in STATS}); arrs.update({f"scm__{s}": SCM[s] for s in STATS})
-    np.savez(f"results/toys/{toy.name}_stats{suffix}.npz", **arrs)
+    np.savez(f"results/toys/{stem}_stats{suffix}.npz", **arrs)
     print(f"{'stat':12s} {'floor':>6s} | SC-SI: W1 sd-ratio bias  PITks | IW-fit: W1 sd-ratio bias PITks | SCM|z|  | SBC-KS ref/scsi/iw")
     for s in STATS:
         r = metrics[s]
