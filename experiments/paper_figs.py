@@ -159,6 +159,10 @@ def fig_finance():
             m, lo, hi_ = res["mv"][n]["log_var_ratio_vs_OAS"]
             a0.plot([lo, hi_], [y, y], color=col[n], lw=2.0, solid_capstyle="round"); a0.plot(m, y, "o", color=col[n], ms=5, mec=SURFACE, mew=0.8)
         a0.axvline(0, color=AQUA, lw=1.3)
+        for y, n in zip(ys, order):                                              # annualised realised volatility of the portfolio, as an aligned column
+            a0.text(0.216, y, f"{res['mv'][n]['ann_vol']:.2f}%", ha="right", va="center", fontsize=7.4, color=INK2)
+        a0.text(0.216, len(order) - 0.35, "ann. vol.", ha="right", va="center", fontsize=7.2, color=INK2)
+        a0.set_xlim(-0.055, 0.22); a0.set_ylim(-0.6, len(order) + 0.1); a0.set_xticks([-0.05, 0, 0.05, 0.10, 0.15])
         a0.set_yticks(ys); a0.set_yticklabels([label[n] for n in order], fontsize=7.4); a0.grid(axis="y", visible=False)
         a0.set_xlabel("mean log(realised var. / OAS)"); a0.set_title("(a) Min-variance portfolio", loc="left")
         for a in (a1, a2):
