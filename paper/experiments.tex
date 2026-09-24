@@ -120,7 +120,7 @@ We report the predictive log-score, the coverage of central predictive intervals
   \includegraphics[width=\linewidth]{figs/fig_eeg.pdf}
   \caption{\textbf{EEG on held-out subjects.}
   (a)~Predictive log-score gain over the sample covariance with 95\% subject-level bootstrap intervals; filled: split-half, hollow: next window.
-  (b)~Coverage of the central 80\% predictive interval (dashed: nominal) for directional variances (channel axes and top pooled PCs) and functionals of $C$, split-half.
+  (b)~Coverage of the central 80\% predictive interval (dashed: nominal) for directional variances (channel axes and top pooled PCs) and four functionals of $C$ (log-determinant, log power at Oz, top-eigenvalue share, log condition number), split-half.
   (c)~Accuracy of eyes-open vs.\ eyes-closed classification when only the most confident windows are kept; SC-SI uses the posterior-averaged classifier, the others plug-in features.}
   \label{fig:eeg}
 \end{figure}
@@ -134,7 +134,7 @@ The ranking is preserved when the covariance drifts between windows ($+15.7$ for
 For directional variances the 80\% intervals of \scsi{} and IW-ML are close to nominal ($0.76$ each, at 50/80/95\%: $0.47/0.76/0.91$ and $0.46/0.76/0.92$), whereas the plug-ins under-cover ($0.63$--$0.65$ at 80\%).
 The two Bayesian methods separate on spectrum-dependent functionals (Fig.~\ref{fig:eeg}b): the 80\% interval of the log-determinant covers $0.65$ for \scsi{} against $0.43$ for IW-ML and $0.17$--$0.47$ for the plug-ins; for the log condition number, $0.77$ against $0.55$ and $0.14$--$0.66$.
 This is consistent with a conjugate prior's single concentration parameter being too rigid for the spectrum.
-IW-ML is better on the top-eigenvalue share ($0.83$ vs.\ $0.77$), and every method under-covers the open-vs-closed Riemannian distance ($0.26$--$0.41$; \scsi{} highest).
+IW-ML is better on the top-eigenvalue share ($0.83$ vs.\ $0.77$), and every method under-covers the open-vs-closed Riemannian distance ($0.26$--$0.41$, \scsi{} highest; not shown, Appendix~\ref{app:eeg}).
 \textbf{Decisions.}
 Averaging predictions over posterior draws raises single-window accuracy to $0.852$ from $0.78$--$0.82$ for the plug-ins and lowers the negative log-likelihood to $0.379$ from $0.43$--$0.47$; keeping the 50\% most confident windows gives $0.956$ against $0.90$--$0.91$ (Fig.~\ref{fig:eeg}c).
 Paired subject-level bootstrap intervals exclude zero for accuracy and NLL against the sample-covariance and LW-NLS plug-ins (accuracy $+3.2$ $[0.9,5.5]$ and $+4.3$ $[2.5,6.2]$ points).
