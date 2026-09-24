@@ -1,14 +1,14 @@
 """Camera-ready figures for the experiments section (vector PDF, sized for one text-width column) -> ../paper/fig_real/.
 
-  fig_toy_logscore : validation log-score gap to the oracle vs EM iteration, three d=8 toys
-  fig_toy_stats    : posterior of six statistics at a *median-error* test task, three d=8 toys
+  fig_toy_logscore : validation log-score gap to the oracle vs EM iteration, four d=8 toys
+  fig_toy_stats    : posterior of six statistics at a *median-error* test task, four d=8 toys
   fig_eeg          : (a) log-score gain, (b) 80% coverage per metric, (c) selective classification, cross-validated over all subjects   [PNG, 7.4 in wide]
   fig_finance      : (a) min-variance ratio vs OAS, (b) calibration through time, (c) log-score gain through time   [PNG, 7.4 in wide]
 
 All inputs are committed result files (results/*.json) plus the per-case arrays (gitignored) they were derived from.
 Usage: python paper_figs.py [name ...]   (no argument = all)
 """
-import json, os, sys
+import json, os, re, sys
 import numpy as np, pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -24,6 +24,7 @@ os.makedirs(PDF, exist_ok=True); os.makedirs(PNG, exist_ok=True)
 EEG_TAG = "eeg_w4_s0_k1.0_e0.65"
 FIN_TAG = "fin_d12_nw63_s0_wcsel_wide_k30_ks6-2-6"
 HI = "#eb6834"
+AR1 = "ar1_d8_M8000_n120"                                                       # training run of the AR(1) toy shown in the paper
 LIGHT_BLUE, LIGHT_ORANGE = "#79aee8", "#f2a88e"
 
 
@@ -36,10 +37,10 @@ def save(fig, name, fmt="pdf"):
 
 # ------------------------------------------------------------------------------------------------ toy: log-score vs EM iteration
 def fig_toy_logscore():
-    toys = [("iw_ri_d8", "IW, RI  ($d{=}8$)"), ("iw_nonri_d8", "IW, non-RI  ($d{=}8$)"), ("factor_d8", "Factor model  ($d{=}8$)")]
-    fig, axs = plt.subplots(1, 3, figsize=(5.6, 2.05))
+    toys = [("iw_ri_d8", "IW, RI"), ("iw_nonri_d8", "IW, non-RI"), ("factor_d8", "Factor model"), (AR1, "AR(1)")]
+    fig, axs = plt.subplots(1, 4, figsize=(5.6, 2.05))
     for ax, (t, title) in zip(axs, toys):
-        tr = json.load(open(f"results/toys/{t}_train.json")); o = json.load(open(f"results/toys/{t}_oracle_logscore.json"))
+        tr = json.load(open(f"results/toys/{t}_train.json")); o = json.load(open(f"results/toys/{re.sub(r'_n[0-9]+(s[0-9]+)?$', '', t)}_oracle_logscore.json"))
         ls = {int(k): v for k, v in tr["val_curve"].items()}; ks = sorted(ls)
         orc = o["oracle_J64"]; gap = np.array([ls[k] - orc for k in ks]); iw = o["iw_ml_J64"] - orc
         ax.axhline(0, color=INK, lw=1.3)
@@ -50,7 +51,8 @@ def fig_toy_logscore():
             ax.plot([kls], [ls[kls] - orc], "D", ms=4.6, mfc="none", mec=INK3, mew=1.0)
         ax.plot([ksel], [ls[ksel] - orc], "o", ms=7, mfc="none", mec=INK, mew=1.2)
         lo = min(gap.min(), iw); ax.set_ylim(lo - 0.10 * abs(lo), 0.16 * abs(lo))
-        ax.set_xlim(-0.8, 24.8); ax.set_xticks([0, 4, 8, 12, 16, 20, 24]); ax.set_xlabel("EM iteration $k$")
+        kmax = max(ks); step = 12 if kmax <= 24 else 40 if kmax >= 120 else 20
+        ax.set_xlim(-0.03 * kmax, 1.03 * kmax); ax.set_xticks(np.arange(0, kmax + 1, step)); ax.set_xlabel("EM iteration $k$")
         ax.set_title(title)
         if ax is axs[0]:
             ax.set_ylabel("val. log-score $-$ oracle\n(nats / task)")
@@ -63,9 +65,10 @@ def fig_toy_logscore():
 
 # ------------------------------------------------------------------------------------------------ toy: posterior statistics
 def fig_toy_stats():
-    toys = [("iw_ri_d8", "IW, RI\n$d{=}8,\\ N{=}40$"), ("iw_nonri_d8", "IW, non-RI\n$d{=}8,\\ N{=}28$"), ("factor_d8", "Factor model\n$d{=}8,\\ N{=}28$")]
+    toys = [("iw_ri_d8", "IW, RI\n$d{=}8,\\ N{=}40$"), ("iw_nonri_d8", "IW, non-RI\n$d{=}8,\\ N{=}28$"), ("factor_d8", "Factor model\n$d{=}8,\\ N{=}28$"),
+            (AR1, "AR(1)\n$d{=}8,\\ N{=}40$")]
     titles = ["log det $C$", "log cond.\nnumber", "top-eig.\nshare", "log dir. var.\n(top eigvec)", "log dir. var.\n(bottom eigvec)", "corr. $C_{01}$"]
-    fig, axs = plt.subplots(3, 6, figsize=(5.6, 3.3))
+    fig, axs = plt.subplots(4, 6, figsize=(5.6, 4.3))
     for i, (t, lab) in enumerate(toys):
         D = np.load(f"results/toys/{t}_stats.npz")
         w = np.mean([w1_norm(D[f"scsi__{s}"], D[f"ref__{s}"]) for s in STATS], axis=0)
@@ -85,7 +88,7 @@ def fig_toy_stats():
             if j == 0:
                 ax.set_ylabel(lab, rotation=0, ha="right", va="center", labelpad=20, fontsize=6.4)
     h = [plt.Rectangle((0, 0), 1, 1, color=GRAY, alpha=0.4), plt.Line2D([], [], color=BLUE, lw=1.5), plt.Line2D([], [], color=ORANGE, lw=1.2), plt.Line2D([], [], color=INK, ls=(0, (4, 2)))]
-    fig.legend(h, ["oracle posterior", "SC-SI", "IW conjugate (ML-fitted)", "true value"], loc="lower center", ncol=4, bbox_to_anchor=(0.5, -0.045), columnspacing=1.2)
+    fig.legend(h, ["oracle posterior", "SC-SI", "IW conjugate (ML-fitted)", "true value"], loc="lower center", ncol=4, bbox_to_anchor=(0.5, -0.035), columnspacing=1.2)
     fig.tight_layout(rect=(0, 0.02, 1, 1), h_pad=0.6, w_pad=0.3); save(fig, "fig_toy_stats")
 
 

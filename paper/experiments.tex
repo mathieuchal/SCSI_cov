@@ -32,10 +32,12 @@ It needs no ground truth, so it applies unchanged to real data.
 \label{sec:exp-toys}
 
 \paragraph{Setting and aim.}
-We use three $d{=}8$ priors whose posterior $P(C\mid \Ce)$ is available as an oracle.
+We use four $d{=}8$ priors whose posterior $P(C\mid \Ce)$ is available as an oracle.
 Two are inverse-Wishart, rotationally invariant (RI, $N{=}40$) or with an anisotropic scale matrix of condition number 16 (non-RI, $N{=}28$); conjugacy makes their posterior exact.
 The third is a two-factor model $C=BB^\top+\mathrm{diag}(\psi)$ ($N{=}28$) with a non-conjugate posterior, computed by Hamiltonian Monte Carlo ($\hat R\le 1.02$).
-\scsi{} sees only $M{=}2000$--$3000$ noisy covariances per prior.
+The fourth is not rotationally invariant and lives on a one-parameter curve of covariances: the AR(1) family $C_{ij}=e^{-\gamma|t_i-t_j|}$, $t_i=i/4$, $\log\gamma\sim\mathcal N(0,0.5^2)$ ($N{=}40$).
+The learner is never told the family, and its posterior is a one-dimensional integral over $\gamma$, computed exactly by quadrature (validated by simulation-based calibration).
+\scsi{} sees only noisy covariances: $M{=}2000$--$3000$ per prior, and $M{=}8000$ for AR(1), whose thin posterior needs $K{=}120$ EM iterations rather than 24.
 The aim is to measure how close a learner that never observes a clean $C$ gets to the oracle, and whether it beats the parametric IW-ML baseline exactly when that baseline is misspecified.
 We report (a)~the held-out predictive log-score of $\Ce^{\mathrm{val}}$ given $\Ce^{\mathrm{cal}}$, relative to the oracle, and (b)~the Wasserstein-1 distance between the learned and oracle posteriors of six statistics of $C$, in units of the oracle's posterior standard deviation, averaged over 128 held-out tasks (sampling floor $0.055$; details in Appendix~\ref{app:toys}).
 
@@ -46,21 +48,23 @@ We report (a)~the held-out predictive log-score of $\Ce^{\mathrm{val}}$ given $\
   Held-out predictive log-score relative to the oracle posterior (300 validation pairs, nats per task) along EM iterations $k$; $k{=}0$ is the deconvolved log-Gaussian initialisation.
   Dashed: IW-ML.
   Circle: checkpoint selected by the worst-case PIT score; diamond: log-score maximiser, when different.
-  The sample-covariance plug-in lies 14--25 nats below the oracle (off scale).}
+  AR(1) is trained for $K{=}120$ iterations, the other priors for 24.
+  The sample-covariance plug-in lies 14--26 nats below the oracle (off scale).}
   \label{fig:toy-logscore}
 \end{figure}
 
 \paragraph{Results.}
 \textbf{EM closes most of the gap to the oracle.}
-From the initialisation at $k{=}0$, self-consistent iterations close 67\%, 70\% and 55\% of the log-score gap to the oracle on the RI, non-RI and factor priors (Fig.~\ref{fig:toy-logscore}).
+From the initialisation at $k{=}0$, self-consistent iterations close 67\%, 70\%, 55\% and 96\% of the log-score gap to the oracle on the RI, non-RI, factor and AR(1) priors (Fig.~\ref{fig:toy-logscore}).
 \textbf{Where the parametric family is right it wins; where it is wrong, \scsi{} does.}
 On the conjugate priors IW-ML is exact by construction (0.1--0.2 nats from the oracle), and \scsi{} trails it by 0.4--0.5 nats: the price of not knowing the family.
 On the factor model the ordering flips: IW-ML sits 5.0 nats below the oracle and \scsi{} 3.2, a gain of 1.8 nats.
+On the AR(1) family, which no inverse-Wishart can follow, the gap is far larger: IW-ML is 8.5 nats below the oracle, \scsi{} 0.5, a gain of 8 nats per task.
 
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{fig_real/fig_toy_stats.pdf}
-  \caption{\textbf{Posterior of six statistics of $C$ on the three toy priors.}
+  \caption{\textbf{Posterior of six statistics of $C$ on the four toy priors.}
   Draws for the test task with median error (median over 128 tasks of the mean $W_1$ across statistics), not selected for appearance; dashed line: true value.
   Aggregate distances over all 128 tasks are in Table~\ref{tab:toy-w1}.}
   \label{fig:toy-stats}
@@ -86,6 +90,9 @@ On the factor model the ordering flips: IW-ML sits 5.0 nats below the oracle and
     \midrule
     Factor model & \scsi{} & 0.27 & 0.70 & 0.32 & 0.29 & 0.90 & 0.35 & 0.47 \\
      & IW-ML & 0.27 & 1.00 & 0.65 & 0.85 & 1.15 & 0.45 & 0.73 \\
+    \midrule
+    AR(1) & \scsi{} & 0.22 & 0.56 & 0.33 & 1.23 & 0.83 & 0.54 & 0.62 \\
+     & IW-ML & 2.57 & 2.78 & 2.65 & 4.01 & 3.57 & 3.01 & 3.10 \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -95,9 +102,16 @@ On the IW priors \scsi{} lies within 0.2--0.5 oracle standard deviations on all 
 On the factor model \scsi{} is closer to the oracle than IW-ML on five of six statistics and tied on $\log\det C$ (mean $0.47$ vs.\ $0.73$), by $1.4$--$2.9\times$ on the log condition number, the top-eigenvalue share and the top-direction variance, the statistics that depend on the shape of the spectrum, where a misspecified conjugate family has little freedom.
 The largest residual errors remain the log condition number and the bottom-direction variance ($0.70$, $0.90$), where IW-ML is worse still.
 
+\textbf{On a non-invariant prior the margin is largest, and it is set by the number of EM iterations, not by the data.}
+On AR(1), IW-ML is $2.6$--$4.0$ oracle standard deviations from the oracle on every statistic (mean $3.10$); \scsi{} is $0.22$--$1.23$ (mean $0.62$), $3.3$--$12\times$ closer, with a posterior slightly too wide (mean s.d.\ ratio $1.45$, and $2.3$ for the top-direction variance, the largest residual).
+The residual is not a capacity limit: the same network trained on clean $(C,\Ce)$ pairs (supervised control, 52k steps) reaches a mean $W_1$ of $0.17$.
+It is the length of the self-consistent loop: at $M{=}8000$ the mean $W_1$ falls from $1.10$ ($K{=}24$) to $0.76$ ($K{=}60$) and $0.62$ ($K{=}120$), still decreasing.
+The training-set size hardly matters: at $K{=}60$, $M{=}2000$, $8000$ and $32000$ give $0.80$, $0.76$ and $0.75$, so even $M{=}2000$ is $3.9\times$ closer than IW-ML ($3.11$), and doubling the number of SDE steps changes nothing ($0.76$).
+
 \textbf{Selection matters.}
 The aggregate log-score and the worst-case PIT score pick different checkpoints (Fig.~\ref{fig:toy-logscore}, circle vs.\ diamond).
 On the RI prior the log-score maximiser ($k{=}24$) is worse than our pick ($k{=}12$) on all six statistics (mean $W_1$ $0.50$ vs.\ $0.36$; log condition number $0.72$ vs.\ $0.42$), and likewise on the non-RI prior ($0.28$ vs.\ $0.24$).
+On AR(1) both criteria select the last iteration, so no over-sharpening has set in within $K{=}120$.
 The gap widens with dimension: at $d{=}20$ the log-score maximiser has a log-condition-number distance of $1.51$ against $0.33$ for our pick (Appendix~\ref{app:toys}).
 Accuracy also degrades with dimension: at $d{=}20$ the top-eigenvalue share and the top- and bottom-direction variances remain $1.1$--$1.4$ oracle standard deviations off even at the selected checkpoint, so we regard scaling the general algorithm beyond $d\approx 10$ as open.
 
