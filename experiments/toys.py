@@ -162,6 +162,44 @@ class FactorToy(Toy):
         return Cs[:, idx][:, :n_draws]
 
 
+# --------------------------------------------------------------------------------------------- #
+class AR1Toy(Toy):
+    """Non-rotationally-invariant prior on a one-dimensional Toeplitz family (paper Sec. 4.2):
+        log(gamma) ~ N(0, sigma^2),   C_ij = exp(-gamma |t_i - t_j|),   t_i = i * dt.
+    The learner is never told the family. The exact posterior P(C | Ce) = P(gamma | Ce) pushed through gamma -> C(gamma)
+    is a ONE-dimensional integral, so the oracle is computed by quadrature on a fine log-gamma grid (no MCMC):
+        log p(lg | Ce) = -lg^2 / (2 sigma^2)  -  N/2 [ tr(C(lg)^-1 Ce) + log det C(lg) ]   + const
+    (grid spacing 0.002 versus a posterior s.d. of ~0.05-0.1 in log gamma; draws are jittered uniformly inside their cell)."""
+    exact = True
+
+    def __init__(self, name, d, N, M, sigma=0.5, dt=0.25, device="cpu", n_grid=3001, span=6.0):
+        self.name, self.d, self.N, self.M, self.sigma, self.dt = name, d, N, M, sigma, dt
+        self.device = torch.device(device)
+        t = torch.arange(d, dtype=DT, device=self.device) * dt
+        self.D = (t[:, None] - t[None, :]).abs()
+        self.grid = torch.linspace(-span * sigma, span * sigma, n_grid, dtype=DT, device=self.device)
+        self.dg = float(self.grid[1] - self.grid[0])
+        Ck = self._cov(self.grid)
+        self.Cinv, self.logdet = torch.linalg.inv(Ck), torch.linalg.slogdet(Ck)[1]
+        self.logprior = -self.grid ** 2 / (2 * sigma ** 2)
+
+    def _cov(self, lg):
+        return torch.exp(-torch.exp(lg)[..., None, None] * self.D)
+
+    def sample_prior(self, n, gen=None):
+        lg = self.sigma * torch.randn(n, dtype=DT, device=self.device, generator=gen)
+        return self._cov(lg)
+
+    def ref_posterior(self, Ce, n_draws, gen=None):
+        Ce = Ce.to(DT).to(self.device)
+        M = Ce.shape[0]
+        ll = -0.5 * self.N * (torch.einsum("kij,mij->mk", self.Cinv, Ce) + self.logdet[None, :])
+        w = torch.softmax(ll + self.logprior[None, :], dim=1)
+        idx = torch.multinomial(w, n_draws, replacement=True, generator=gen)                         # (M, n_draws)
+        lg = self.grid[idx] + (torch.rand(idx.shape, dtype=DT, device=self.device, generator=gen) - 0.5) * self.dg
+        return self._cov(lg)
+
+
 TOYS = {
     "iw_ri_d4":    lambda device="cpu": IWToy("iw_ri_d4", 4, 8, 5000, "ri", 12.0, device=device),
     "iw_ri_d8":    lambda device="cpu": IWToy("iw_ri_d8", 8, 40, 2000, "ri", 16.0, device=device),
@@ -169,6 +207,9 @@ TOYS = {
     "iw_ri_d20_M8000": lambda device="cpu": IWToy("iw_ri_d20_M8000", 20, 100, 8000, "ri", 28.0, device=device),
     "iw_nonri_d8": lambda device="cpu": IWToy("iw_nonri_d8", 8, 28, 2000, "nonri", 16.0, device=device),
     "factor_d8":   lambda device="cpu": FactorToy("factor_d8", 8, 28, 3000, device=device),
+    "ar1_d8_M2000":  lambda device="cpu": AR1Toy("ar1_d8_M2000", 8, 40, 2000, device=device),
+    "ar1_d8_M8000":  lambda device="cpu": AR1Toy("ar1_d8_M8000", 8, 40, 8000, device=device),
+    "ar1_d8_M32000": lambda device="cpu": AR1Toy("ar1_d8_M32000", 8, 40, 32000, device=device),
 }
 
 
