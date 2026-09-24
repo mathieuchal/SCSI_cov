@@ -132,7 +132,7 @@ def fig_eeg():
 
 # ------------------------------------------------------------------------------------------------ finance
 def fig_finance():
-    """7.4 in wide PNG with the same type scale as fig_eeg; crisis periods shaded in a single light gray; shared legend on top."""
+    """7.4 in wide PNG with the same type scale as fig_eeg; crisis periods shaded in a single light gray; shared legend below."""
     res = json.load(open(f"results/{FIN_TAG}_results.json")); z = np.load(f"results/{FIN_TAG}_arrays.npz", allow_pickle=True)
     dates = z["dates"].astype("datetime64[D]"); meta, fold = z["meta"], z["fold"]; end = meta[:, 1]
     ue = np.unique(end); mi = np.searchsorted(ue, end); t = dates[ue]; nm_ = len(ue); cnt = np.bincount(mi, minlength=nm_)
@@ -152,8 +152,8 @@ def fig_finance():
            "SC-SI Stein-opt.": LIGHT_BLUE, "SC-SI post. mean": BLUE}
     rc = {"font.size": 8.5, "axes.titlesize": 9, "axes.titleweight": "normal", "axes.labelsize": 8.5, "xtick.labelsize": 8, "ytick.labelsize": 8, "legend.fontsize": 8.5}
     with plt.rc_context(rc):
-        fig = plt.figure(figsize=(7.4, 2.4))
-        gs = fig.add_gridspec(2, 2, width_ratios=[1.0, 1.75], hspace=0.36, wspace=0.34, left=0.135, right=0.995, top=0.775, bottom=0.165)
+        fig = plt.figure(figsize=(7.4, 2.45))
+        gs = fig.add_gridspec(2, 2, width_ratios=[1.0, 1.75], hspace=0.36, wspace=0.34, left=0.135, right=0.995, top=0.915, bottom=0.33)
         a0 = fig.add_subplot(gs[:, 0]); a1 = fig.add_subplot(gs[0, 1]); a2 = fig.add_subplot(gs[1, 1], sharex=a1)
         ys = np.arange(len(order))[::-1]
         for y, n in zip(ys, order):
@@ -182,7 +182,7 @@ def fig_finance():
         a2.axhline(0, color=GRAY, lw=0.8); a2.set_ylabel("nats"); a2.set_title("(c) Forward log-score gain vs sample cov. (nats / window)", loc="left")
         a2.set_xlim(t[0] - np.timedelta64(20, "D"), t[-1] + np.timedelta64(20, "D")); a2.xaxis.set_major_locator(mdates.YearLocator(5)); a2.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
         h = [plt.Line2D([], [], color=c, lw=3.5) for c in (GRAY, AQUA, YELLOW, ORANGE, BLUE)]
-        fig.legend(h, ["sample cov.", "OAS", "LW-NLS", "IW conj", "SC-SI"], loc="upper center", ncol=5, bbox_to_anchor=(0.5, 1.01), columnspacing=1.6, handlelength=1.4)
+        fig.legend(h, ["sample cov.", "OAS", "LW-NLS", "IW conj", "SC-SI"], loc="lower center", ncol=5, bbox_to_anchor=(0.5, 0.0), columnspacing=1.6, handlelength=1.4)
         save(fig, "fig_finance", fmt="png")
 
 
