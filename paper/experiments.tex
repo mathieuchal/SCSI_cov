@@ -120,8 +120,9 @@ Classification is cross-validated over all 109 subjects (5 subject-disjoint fold
   \centering
   \includegraphics[width=\linewidth]{fig_real/fig_eeg.png}
   \caption{\textbf{EEG on held-out subjects.}
+  Panels (a) and (b) use the 29 held-out test subjects.
   (a)~Predictive log-score gain over the sample covariance with 95\% subject-level bootstrap intervals; filled: split-half, hollow: next window.
-  (b)~Coverage of the central 80\% predictive interval (dashed: nominal) for directional variances (channel axes and top pooled PCs) and four functionals of $C$ (log-determinant, log power at Oz, top-eigenvalue share, log condition number), split-half.
+  (b)~Coverage of the central 80\% predictive interval (dashed: nominal) for directional variances (channel axes and top pooled PCs) and four functionals of $C$ (log det: log-determinant; log Oz: log power at Oz; top share: top-eigenvalue share; log cond.: log condition number), split-half; dir.\ var.: directional variances.
   (c)~Accuracy of eyes-open vs.\ eyes-closed classification when only the most confident windows are kept, from 5-fold subject-disjoint cross-validation over all 109 subjects; SC-SI uses the posterior-averaged classifier, the others plug-in features.}
   \label{fig:eeg}
 \end{figure}
@@ -172,7 +173,7 @@ We made this choice after inspecting validation curves; Appendix~\ref{app:select
   \centering
   \includegraphics[width=\linewidth]{fig_real/fig_finance.png}
   \caption{\textbf{Financial returns, 1995--2026.}
-  (a)~Out-of-sample minimum-variance portfolio: mean log ratio of realised 21-day variance to OAS with 95\% month-block bootstrap intervals (left is lower risk; PCA: number of factors by the Gavish--Donoho threshold); the percentages give the annualised realised volatility of the portfolio.
+  (a)~Out-of-sample minimum-variance portfolio: mean log ratio of realised 21-day variance to OAS with 95\% month-block bootstrap intervals (left is lower risk); post.\ mean: posterior-mean covariance, Stein-opt.: Stein-optimal covariance, PCA, GD rule: number of factors by the Gavish--Donoho threshold; the percentages give the annualised realised volatility of the portfolio.
   (b)~12-month rolling coverage of the central 80\% forward interval for the variances of the 12 assets and the equal-weight portfolio.
   (c)~12-month rolling forward predictive log-score gain over the sample covariance.
   Shaded: dot-com bust, global financial crisis and COVID; dotted: model refits (2005, 2015).
