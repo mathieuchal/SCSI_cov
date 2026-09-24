@@ -114,6 +114,7 @@ The aim is to test whether the learned posterior is a calibrated predictive law 
 \paragraph{Protocols and metrics.}
 For each test window we compute the posterior from a calibration window and score the predictive law of a validation window, under two protocols: \emph{split-half}, where both windows are interleaved 1-s chunks of the same 8-s epoch and thus share one covariance (isolating estimation uncertainty; 812 cases), and \emph{next window}, where the covariance may drift (754 cases).
 We report the predictive log-score, the coverage of central predictive intervals for directional variances and for nonlinear functionals of $C$, and eyes-open vs.\ eyes-closed classification from a single window with a logistic regression on tangent-space features~\citep{barachant2012multiclass}, using either the plug-in covariance or the average prediction over posterior draws.
+Classification is cross-validated over all 109 subjects (5 subject-disjoint folds, each with its own prior, classifier and checkpoint) so that every subject is tested once; the other analyses use the 29 held-out subjects.
 
 \begin{figure}[t]
   \centering
@@ -121,7 +122,7 @@ We report the predictive log-score, the coverage of central predictive intervals
   \caption{\textbf{EEG on held-out subjects.}
   (a)~Predictive log-score gain over the sample covariance with 95\% subject-level bootstrap intervals; filled: split-half, hollow: next window.
   (b)~Coverage of the central 80\% predictive interval (dashed: nominal) for directional variances (channel axes and top pooled PCs) and four functionals of $C$ (log-determinant, log power at Oz, top-eigenvalue share, log condition number), split-half.
-  (c)~Accuracy of eyes-open vs.\ eyes-closed classification when only the most confident windows are kept; SC-SI uses the posterior-averaged classifier, the others plug-in features.}
+  (c)~Accuracy of eyes-open vs.\ eyes-closed classification when only the most confident windows are kept, from 5-fold subject-disjoint cross-validation over all 109 subjects; SC-SI uses the posterior-averaged classifier, the others plug-in features.}
   \label{fig:eeg}
 \end{figure}
 
@@ -136,12 +137,14 @@ The two Bayesian methods separate on spectrum-dependent functionals (Fig.~\ref{f
 This is consistent with a conjugate prior's single concentration parameter being too rigid for the spectrum.
 IW-ML is better on the top-eigenvalue share ($0.83$ vs.\ $0.77$), and every method under-covers the open-vs-closed Riemannian distance ($0.26$--$0.41$, \scsi{} highest; not shown, Appendix~\ref{app:eeg}).
 \textbf{Decisions.}
-Averaging predictions over posterior draws raises single-window accuracy to $0.852$ from $0.78$--$0.82$ for the plug-ins and lowers the negative log-likelihood to $0.379$ from $0.43$--$0.47$; keeping the 50\% most confident windows gives $0.956$ against $0.90$--$0.91$ (Fig.~\ref{fig:eeg}c).
-Paired subject-level bootstrap intervals exclude zero for accuracy and NLL against the sample-covariance and LW-NLS plug-ins (accuracy $+3.2$ $[0.9,5.5]$ and $+4.3$ $[2.5,6.2]$ points).
-Calibration of the classifier itself is not improved (ECE $0.076$ vs.\ $0.027$--$0.051$), and on a second subject split the gain at 50\% retention did not replicate (Appendix~\ref{app:eeg}).
+Averaging predictions over posterior draws gives a small gain in eyes-open vs.\ eyes-closed classification when every subject is tested once (Fig.~\ref{fig:eeg}c).
+Accuracy is $0.806$ against $0.781$--$0.792$ for the plug-ins, and the negative log-likelihood $0.443$ against $0.464$--$0.492$.
+Paired subject-level bootstrap intervals put the accuracy gain at $+1.4$ $[0.1,2.8]$ points over the sample covariance, $+1.5$ $[0.0,3.0]$ over LW-NLS and $+2.6$ $[0.4,4.6]$ over OAS, with \scsi{} ahead in 3, 4 and 5 of the 5 folds.
+Keeping the 50\% most confident windows helps against OAS ($+3.7$ points) but not against the sample covariance or LW-NLS (intervals include zero).
+The larger gains seen on a single 29-subject split ($+3$ to $+4$ points) do not carry over to the whole cohort, so we regard the classification benefit as small.
 
 \paragraph{Takeaway.}
-On unseen subjects the learned posterior is a calibrated predictive law for first-order quantities and, unlike a fitted conjugate prior, for spectrum-dependent functionals; the downstream classification benefit is modest.
+On unseen subjects the learned posterior is a calibrated predictive law for first-order quantities and, unlike a fitted conjugate prior, for spectrum-dependent functionals; the downstream classification benefit is small.
 
 % =====================================================================================================
 \subsection{Financial returns: decisions across market regimes}

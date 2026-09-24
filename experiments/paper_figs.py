@@ -2,7 +2,7 @@
 
   fig_toy_logscore : validation log-score gap to the oracle vs EM iteration, three d=8 toys
   fig_toy_stats    : posterior of six statistics at a *median-error* test task, three d=8 toys
-  fig_eeg          : (a) log-score gain, (b) 80% coverage per metric, (c) selective classification   [PNG, 7.4 in wide]
+  fig_eeg          : (a) log-score gain, (b) 80% coverage per metric, (c) selective classification, cross-validated over all subjects   [PNG, 7.4 in wide]
   fig_finance      : (a) min-variance ratio vs OAS, (b) calibration through time, (c) log-score gain through time
 
 All inputs are committed result files (results/*.json) plus the per-case arrays (gitignored) they were derived from.
@@ -92,7 +92,6 @@ def fig_toy_stats():
 def fig_eeg():
     """Wider than the other figures (7.4 in) so that the three panels are individually readable; PNG output."""
     nw = json.load(open(f"results/{EEG_TAG}_wide_k30_k8_results.json")); sh = json.load(open(f"results/{EEG_TAG}_wide_k30_splithalf_k8.json"))
-    arr = np.load(f"results/{EEG_TAG}_wide_k30_k8_arrays.npz", allow_pickle=True)
     M = {"Sample cov.": ("sample cov.", GRAY), "Linear shrinkage (OAS)": ("OAS", AQUA), "Nonlinear shrinkage (LW)": ("LW-NLS", YELLOW),
          "IW conjugate (ML-fitted)": ("IW conj", ORANGE), "SC-SI (ours)": ("SC-SI", BLUE)}
     rc = {"font.size": 8.5, "axes.titlesize": 9, "axes.titleweight": "normal", "axes.labelsize": 8.5, "xtick.labelsize": 8, "ytick.labelsize": 8, "legend.fontsize": 8.5}
@@ -120,15 +119,11 @@ def fig_eeg():
         a1.axhline(0.8, color=INK, lw=1.3, ls=(0, (4, 2))); a1.set_ylim(0, 1.0)
         a1.set_xticks(xs); a1.set_xticklabels([g[0] for g in groups]); a1.grid(axis="x", visible=False)
         a1.set_ylabel("80% coverage"); a1.set_title("(b) Calibration, split-half", loc="left")
-        # (c) selective classification, eyes open vs closed
-        prob, pn, y = arr["prob"], list(arr["prob_names"]), arr["te_y"]
-        pick = {"SCM -> LR (plug-in)": ("sample cov.", GRAY), "OAS -> LR (plug-in)": ("OAS", AQUA), "NLS -> LR (plug-in)": ("LW-NLS", YELLOW),
-                "Posterior-trained LR, posterior-averaged (ours)": ("SC-SI", BLUE)}
-        fr = np.linspace(0.2, 1.0, 33)
-        for n, (lab, c) in pick.items():
-            p = prob[pn.index(n)]; o = np.argsort(-np.abs(p - 0.5))
-            a2.plot(fr, [((p[o[:max(int(f * len(p)), 1)]] > 0.5).astype(int) == y[o[:max(int(f * len(p)), 1)]]).mean() for f in fr], color=c, lw=1.9 if lab == "SC-SI" else 1.3)
-        a2.set_xlabel("fraction kept (confident first)"); a2.set_ylabel("accuracy on kept"); a2.set_title("(c) Open vs closed", loc="left"); a2.set_xlim(0.2, 1.0)
+        # (c) selective classification, eyes open vs closed: 5-fold subject-disjoint CV, all 109 subjects (eeg_cv_classif.py)
+        cv = json.load(open(f"results/{EEG_TAG}_cv5_wide_classification.json"))["curves"]; fr = np.array(cv["fraction"])
+        for lab, c in (("sample cov.", GRAY), ("OAS", AQUA), ("LW-NLS", YELLOW), ("SC-SI", BLUE)):
+            a2.plot(fr, cv[lab], color=c, lw=1.9 if lab == "SC-SI" else 1.3)
+        a2.set_xlabel("fraction kept (confident first)"); a2.set_ylabel("accuracy on kept"); a2.set_title("(c) Open vs closed, CV", loc="left"); a2.set_xlim(0.2, 1.0)
         h = [plt.Line2D([], [], color=c, lw=3.5) for (_, c) in M.values()]
         fig.legend(h, [v[0] for v in M.values()], loc="lower center", ncol=5, bbox_to_anchor=(0.5, 0.0), columnspacing=1.6, handlelength=1.4)
         save(fig, "fig_eeg", fmt="png")
