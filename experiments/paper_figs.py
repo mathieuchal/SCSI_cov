@@ -92,7 +92,7 @@ def fig_eeg():
     arr = np.load(f"results/{EEG_TAG}_wide_k30_k8_arrays.npz", allow_pickle=True)
     M = {"Sample cov.": ("sample cov.", GRAY), "Linear shrinkage (OAS)": ("OAS", AQUA), "Nonlinear shrinkage (LW)": ("LW-NLS", YELLOW),
          "IW conjugate (ML-fitted)": ("IW conjugate", ORANGE), "SC-SI (ours)": ("SC-SI", BLUE)}
-    fig = plt.figure(figsize=(5.6, 2.5)); gs = fig.add_gridspec(1, 3, width_ratios=[0.85, 1.7, 0.95], wspace=0.55)
+    fig = plt.figure(figsize=(5.6, 1.8)); gs = fig.add_gridspec(1, 3, width_ratios=[0.85, 1.55, 0.95], wspace=0.55)
     a0, a1, a2 = (fig.add_subplot(gs[0, k]) for k in range(3))
     # (a) log-score gain vs sample covariance
     names = ["Linear shrinkage (OAS)", "Nonlinear shrinkage (LW)", "IW conjugate (ML-fitted)", "SC-SI (ours)"]; ys = np.arange(len(names))[::-1] * 1.0
@@ -102,18 +102,18 @@ def fig_eeg():
         g2, lo2, hi2 = nw["methods"][n]["gain_vs_scm"], *nw["methods"][n]["gain_ci"]
         a0.plot([lo2, hi2], [y - 0.16] * 2, color=c, lw=1.5, alpha=0.5, solid_capstyle="round"); a0.plot(g2, y - 0.16, "o", mfc=SURFACE, mec=c, mew=1.1, ms=3.8)
     a0.axvline(0, color=INK3, lw=0.9); a0.set_yticks(ys); a0.set_yticklabels([M[n][0] for n in names]); a0.grid(axis="y", visible=False)
-    a0.set_xlabel("gain vs sample cov. (nats / window)"); a0.set_title("(a) Log-score gain", loc="left")
+    a0.set_xlabel("nats / window"); a0.set_title("(a) Log-score gain", loc="left")
     a0.set_xlim(-25, 24)
     # (b) coverage of the central 80% interval, per metric (split-half)
-    groups = [("dir. var.", lambda m: sh["dir_cov"][m]["0.8"]), ("log det", lambda m: sh["functional"]["log det C"][m]["cov"]["0.8"]),
-              ("log Oz power", lambda m: sh["functional"]["log C[Oz,Oz]"][m]["cov"]["0.8"]), ("top-eig. share", lambda m: sh["functional"]["top-eigenvalue share"][m]["cov"]["0.8"]),
-              ("log cond.", lambda m: sh["functional"]["log cond. number"][m]["cov"]["0.8"]), ("Riemann. dist.", lambda m: sh["distance"][m]["cov"]["0.8"])]
+    groups = [("dir.\nvar.", lambda m: sh["dir_cov"][m]["0.8"]), ("log\ndet", lambda m: sh["functional"]["log det C"][m]["cov"]["0.8"]),
+              ("log\nOz", lambda m: sh["functional"]["log C[Oz,Oz]"][m]["cov"]["0.8"]), ("top\nshare", lambda m: sh["functional"]["top-eigenvalue share"][m]["cov"]["0.8"]),
+              ("log\ncond.", lambda m: sh["functional"]["log cond. number"][m]["cov"]["0.8"])]
     xs = np.arange(len(groups)); wb = 0.16
     for j, m in enumerate(M):
         a1.bar(xs + (j - 2) * wb, [g[1](m) for g in groups], wb * 0.92, color=M[m][1])
     a1.axhline(0.8, color=INK, lw=1.2, ls=(0, (4, 2))); a1.set_ylim(0, 1.0)
-    a1.set_xticks(xs); a1.set_xticklabels([g[0] for g in groups], fontsize=5.8, rotation=35, ha="right", rotation_mode="anchor"); a1.grid(axis="x", visible=False)
-    a1.set_ylabel("coverage of 80% interval"); a1.set_title("(b) Calibration, split-half", loc="left")
+    a1.set_xticks(xs); a1.set_xticklabels([g[0] for g in groups], fontsize=5.8); a1.grid(axis="x", visible=False)
+    a1.set_ylabel("80% coverage"); a1.set_title("(b) Calibration, split-half", loc="left")
     # (c) selective classification, eyes open vs closed
     prob, pn, y = arr["prob"], list(arr["prob_names"]), arr["te_y"]
     pick = {"SCM -> LR (plug-in)": ("sample cov.", GRAY), "OAS -> LR (plug-in)": ("OAS", AQUA), "NLS -> LR (plug-in)": ("LW-NLS", YELLOW),
@@ -122,10 +122,10 @@ def fig_eeg():
     for n, (lab, c) in pick.items():
         p = prob[pn.index(n)]; o = np.argsort(-np.abs(p - 0.5))
         a2.plot(fr, [((p[o[:max(int(f * len(p)), 1)]] > 0.5).astype(int) == y[o[:max(int(f * len(p)), 1)]]).mean() for f in fr], color=c, lw=1.5 if lab == "SC-SI" else 1.1)
-    a2.set_xlabel("fraction kept (confident first)"); a2.set_ylabel("accuracy on kept windows"); a2.set_title("(c) Open vs closed", loc="left")
+    a2.set_xlabel("fraction kept (confident first)"); a2.set_ylabel("accuracy on kept"); a2.set_title("(c) Open vs closed", loc="left")
     a2.set_xlim(0.2, 1.0)
     h = [plt.Line2D([], [], color=c, lw=3) for (_, c) in M.values()]
-    fig.legend(h, [v[0] for v in M.values()], loc="lower center", ncol=5, bbox_to_anchor=(0.5, -0.2), columnspacing=1.2, handlelength=1.3)
+    fig.legend(h, [v[0] for v in M.values()], loc="lower center", ncol=5, bbox_to_anchor=(0.5, -0.17), columnspacing=1.2, handlelength=1.3)
     save(fig, "fig_eeg")
 
 
