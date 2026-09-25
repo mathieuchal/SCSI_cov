@@ -1,19 +1,24 @@
-"""Rows of the toy W1 table (paper/experiments.tex, Table tab:toy-w1) from results/toys/{stem}_metrics.json.
+"""Rows of the toy table (paper/experiments.tex, Table tab:toy-w1) from results/toys/.
 
-W1 to the oracle posterior in oracle-s.d. units, mean over the held-out tasks, for SC-SI and the ML-fitted IW baseline.
+First column: held-out predictive log-score of Ce_val given Ce_cal (nats per task, 300 validation pairs, J=64 draws; the quantity
+plotted in fig_toy_logscore) for SC-SI at its selected checkpoint, the ML-fitted IW baseline and the oracle posterior.
+Then: W1 to the oracle posterior in oracle-s.d. units, mean over the 128 held-out tasks, for SC-SI and IW-ML.
 Usage: python toy_table.py [ar1_stem]      (default: the AR(1) run used in paper_figs.py)
 """
-import json, sys
+import json, re, sys
 import numpy as np
 from toy_eval import STATS
 
 AR1 = sys.argv[1] if len(sys.argv) > 1 else "ar1_d8_M8000_n120"
+strip = lambda t: re.sub(r"_n[0-9]+(s[0-9]+)?$", "", t)          # training variant -> toy name (oracle files are per toy)
 ROWS = [("iw_ri_d8", "IW, RI"), ("iw_nonri_d8", "IW, non-RI"), ("factor_d8", "Factor model"), (AR1, "AR(1)")]
 
 for i, (stem, name) in enumerate(ROWS):
     m = json.load(open(f"results/toys/{stem}_metrics.json"))["metrics"]
+    tr = json.load(open(f"results/toys/{stem}_train.json")); o = json.load(open(f"results/toys/{strip(stem)}_oracle_logscore.json"))
+    ls = {"scsi": tr["val_curve"][str(tr["best_k"])], "iwfit": o["iw_ml_J64"], "oracle": o["oracle_J64"]}
     if i:
         print(r"    \midrule")
-    for j, (key, meth) in enumerate([("scsi", r"\scsi{}"), ("iwfit", "IW-ML")]):
-        w = [m[s][key]["w1"] for s in STATS]
-        print(f"    {name if j == 0 else ''} & {meth} & " + " & ".join(f"{x:.2f}" for x in w) + f" & {np.mean(w):.2f} \\\\")
+    for j, (key, meth) in enumerate([("scsi", r"\scsi{}"), ("iwfit", "IW-ML"), ("oracle", "Oracle")]):
+        w = " & ".join(f"{x:.2f}" for x in [m[s][key]["w1"] for s in STATS]) + f" & {np.mean([m[s][key]['w1'] for s in STATS]):.2f}" if key != "oracle" else " & ".join(["--"] * 7)
+        print(f"    {name if j == 0 else ''} & {meth} & ${ls[key]:.2f}$ & {w} \\\\")
