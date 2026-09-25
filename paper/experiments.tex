@@ -73,31 +73,32 @@ On the AR(1) family, which no inverse-Wishart can follow, the gap is far larger:
 \begin{table}[t]
   \centering
   \caption{\textbf{Log-score and distance to the oracle posterior.}
-  Log-score: held-out predictive log-score of $\Ce^{\mathrm{val}}$ given $\Ce^{\mathrm{cal}}$ in nats per task (300 validation pairs, 64 posterior draws, as in Fig.~\ref{fig:toy-logscore}; higher is better; \scsi{} at its selected checkpoint).
-  $W_1$: Wasserstein-1 distance to the oracle posterior in units of its s.d., mean over 128 held-out tasks (lower is better; sampling floor $0.055$).
-  $\kappa$: condition number; $\mathrm{dv}$: log variance along the top/bottom empirical eigenvector of $\Ce$; $C_{01}$: correlation of the first two coordinates.}
+  Log-score: held-out predictive log-score of $\Ce^{\mathrm{val}}$ given $\Ce^{\mathrm{cal}}$ in nats per task (300 validation pairs, 64 posterior draws, as in Fig.~\ref{fig:toy-logscore}; \scsi{} at its selected checkpoint).
+  $W_1$: Wasserstein-1 distance to the oracle posterior in units of its s.d., mean over 128 held-out tasks (sampling floor $0.055$).
+  $\kappa$: condition number; $\mathrm{dv}$: log variance along the top/bottom empirical eigenvector of $\Ce$; $C_{01}$: correlation of the first two coordinates.
+  Arrows give the better direction; bold: best of the two methods in each block (the oracle is the reference).}
   \label{tab:toy-w1}
   \footnotesize
   \setlength{\tabcolsep}{2.8pt}
   \begin{tabular}{@{}llcccccccc@{}}
     \toprule
-     & & & \multicolumn{7}{c}{$W_1$ to the oracle posterior} \\
+     & & & \multicolumn{7}{c}{$W_1$ to the oracle posterior $\downarrow$} \\
     \cmidrule(l){4-10}
-    Prior & Method & log-score & $\log\det C$ & $\log\kappa$ & top share & $\mathrm{dv}_{\mathrm{top}}$ & $\mathrm{dv}_{\mathrm{bot}}$ & $C_{01}$ & mean \\
+    Prior & Method & log-score $\uparrow$ & $\log\det C$ & $\log\kappa$ & top share & $\mathrm{dv}_{\mathrm{top}}$ & $\mathrm{dv}_{\mathrm{bot}}$ & $C_{01}$ & mean \\
     \midrule
     IW, RI & \scsi{} & $-134.27$ & 0.26 & 0.42 & 0.43 & 0.47 & 0.35 & 0.23 & 0.36 \\
-     & IW-ML & $-133.86$ & 0.05 & 0.05 & 0.05 & 0.05 & 0.05 & 0.05 & 0.05 \\
+     & IW-ML & $\mathbf{-133.86}$ & \textbf{0.05} & \textbf{0.05} & \textbf{0.05} & \textbf{0.05} & \textbf{0.05} & \textbf{0.05} & \textbf{0.05} \\
      & Oracle & $-133.76$ & -- & -- & -- & -- & -- & -- & -- \\
     \midrule
     IW, non-RI & \scsi{} & $-53.46$ & 0.23 & 0.22 & 0.23 & 0.25 & 0.31 & 0.22 & 0.24 \\
-     & IW-ML & $-52.95$ & 0.05 & 0.05 & 0.05 & 0.05 & 0.05 & 0.05 & 0.05 \\
+     & IW-ML & $\mathbf{-52.95}$ & \textbf{0.05} & \textbf{0.05} & \textbf{0.05} & \textbf{0.05} & \textbf{0.05} & \textbf{0.05} & \textbf{0.05} \\
      & Oracle & $-52.75$ & -- & -- & -- & -- & -- & -- & -- \\
     \midrule
-    Factor model & \scsi{} & $-93.05$ & 0.27 & 0.70 & 0.32 & 0.29 & 0.90 & 0.35 & 0.47 \\
-     & IW-ML & $-94.89$ & 0.27 & 1.00 & 0.65 & 0.85 & 1.15 & 0.45 & 0.73 \\
+    Factor model & \scsi{} & $\mathbf{-93.05}$ & \textbf{0.27} & \textbf{0.70} & \textbf{0.32} & \textbf{0.29} & \textbf{0.90} & \textbf{0.35} & \textbf{0.47} \\
+     & IW-ML & $-94.89$ & \textbf{0.27} & 1.00 & 0.65 & 0.85 & 1.15 & 0.45 & 0.73 \\
      & Oracle & $-89.89$ & -- & -- & -- & -- & -- & -- & -- \\
     \midrule
-    AR(1) & \scsi{} & $-27.63$ & 0.22 & 0.56 & 0.33 & 1.23 & 0.83 & 0.54 & 0.62 \\
+    AR(1) & \scsi{} & $\mathbf{-27.63}$ & \textbf{0.22} & \textbf{0.56} & \textbf{0.33} & \textbf{1.23} & \textbf{0.83} & \textbf{0.54} & \textbf{0.62} \\
      & IW-ML & $-35.68$ & 2.57 & 2.78 & 2.65 & 4.01 & 3.57 & 3.01 & 3.10 \\
      & Oracle & $-27.15$ & -- & -- & -- & -- & -- & -- & -- \\
     \bottomrule
