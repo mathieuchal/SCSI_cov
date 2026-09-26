@@ -1,9 +1,7 @@
 # SC-SI covariance posterior — experiments
 
-Code accompanying the working draft **"Self-Consistent Stochastic Interpolants for Covariance Prior
-and Posterior Learning"** (`CovariancePosteriorPrior.pdf`, an ICLR 2027 submission that itself reports
-no numerical results — Section 5 of the paper only proposes experiments). This repository implements
-the method and runs it on controlled toy models and two real-data applications.
+Code accompanying the draft **"Self-Consistent Stochastic Interpolants for Covariance Prior
+and Posterior Learning"**. This repository implements the self-consistent interpolant method and runs it on controlled toy models and two real-data applications.
 
 The full write-up of every experiment — protocols, tables, calibration checks, and caveats — is
 **`experiments/REPORT.md`**. This README only covers installation and how to run things.
@@ -69,8 +67,7 @@ python eeg_figs.py eeg_w4_s0_k1.0_e0.65; python fin_figs.py; python bench_figs.p
 ```
 
 Each `*_exp*.py` / `toy_train.py` script trains its own SC-SI model and caches checkpoints under
-`results/`; re-running with the same arguments reuses them. Training runs are CPU-bound and take
-roughly 20–45 minutes each on 2–6 threads; there is no GPU dependency.
+`results/`; re-running with the same arguments reuses them. 
 
 Small result summaries (`results/**/*.json`, `*.txt`) are checked in — they're the source of the
 numbers in `REPORT.md`. Large binary artifacts (posterior draws, model checkpoints: `*.npz`, `*.pt`)
@@ -78,5 +75,5 @@ are gitignored and regenerate from the commands above.
 
 ## Status
 
-This is a research codebase for one paper's experiments, not a general-purpose library. No license
+This is a research codebase. No license
 has been chosen yet.
