@@ -84,7 +84,11 @@ if __name__=='__main__':
         def Ce_tr(B):
             return wishart_channel(toy.sample_prior(B, g), N, g)
     else:
-        C_tr = toy.sample_prior(toy.M, g); Ce_tr = wishart_channel(C_tr, N, g); del C_tr                # the ONLY training data: noisy Ce
+        # the ONLY training data: one fixed ensemble of M noisy Ce. On --resume it must be the SAME ensemble as in the
+        # original run, so it is redrawn from a fresh Generator(1000+seed) (g itself was restored to the checkpoint's state);
+        # a fresh run draws it from g as before (identical stream).
+        gd = torch.Generator().manual_seed(1000 + a.seed) if resume_ckpt is not None else g
+        C_tr = toy.sample_prior(toy.M, gd); Ce_tr = wishart_channel(C_tr, N, gd); del C_tr
     # Validation dataset. Drawn from g after the training data: toy_oracle_log_score.py replays this exact sequence to
     # rebuild the same validation pairs, so keep the order and sizes of these draws unchanged.
     C_val = toy.sample_prior(a.n_val, g);

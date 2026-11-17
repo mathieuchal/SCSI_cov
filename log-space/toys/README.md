@@ -122,24 +122,35 @@ Nothing is recomputed in step 4. Steps 1–3 produce every number in the figure 
 
 ## Finite data: the M=5000 runs
 
-`toys.py` also defines `{toy}_d8_M5000`, the finite-data counterparts of the production toys. They share the same prior and N=40, but train on one fixed ensemble of M=5000 noisy Ce instead of a fresh ensemble at every E-step. They use the same architectures and the same training protocol, and write to a separate folder with `--out_dir`:
+`toys.py` also defines `{toy}_d8_M5000`, the finite-data counterparts of the production toys. They share the same prior and N=40, but train on one fixed ensemble of M=5000 noisy Ce instead of a fresh ensemble at every E-step. They use the same architectures and one training stage only (k=0..700, cosine outer lr), and write to a separate folder with `--out_dir`:
 
 ```bash
 bash train_M5000.sh     # -> results/toys_M=5000/, logs in ../logs/M=5000/ (training only)
 ```
 
-The script currently trains `iw_nonri`, `factor` and `diag`, one run at a time, in about 1 h each on one GPU. With finite data, `--last_checkpoint` is not imposed. The evaluation of these runs (same tables as M=inf) is still to be set up.
+The script currently trains `iw_nonri`, `factor` and `diag`, one run at a time, in about 1 h each on one GPU. With finite data, `--resume` redraws the same fixed training ensemble as the original run (fresh `Generator(1000+seed)`), so a resumed run keeps training on the same M Ce. With finite data, `--last_checkpoint` is not imposed. The evaluation of these runs (same tables as M=inf) is still to be set up.
 
 ## Effect of the SDE time step: `toy_dt_study.py`
 
 The sampler integrates the Föllmer SDE by Euler–Maruyama on t ∈ [0, 1] with Δt = 1/`n_steps`. Every production result uses 64 steps (`SCSIConfig.n_sde_steps`). `toy_dt_study.py` re-evaluates a run at its `best_k` with other step counts, at evaluation only. It reuses the production protocols: the J=2·10⁶ log-score of step 2 and the W1 of step 3.
 
 ```bash
-python toy_dt_study.py --toys iw_nonri_d8_inf,factor_d8_inf,diag_d8_inf --n_steps 32,128
-# -> results/toys_M=-1/{toy}_dt.json and figs/toy_dt_table.txt
+python toy_dt_study.py --toys iw_ri_d8_inf,iw_nonri_d8_inf,factor_d8_inf,iso_diag_d8_inf,ar1_d8_inf,diag_d8_inf --n_steps 32,128
+# -> results/toys_M=-1/{toy}_dt.json and figs/toy_dt_table.txt   (--table_only: rebuild the table from the JSON files)
 ```
 
-With `--n_steps 64`, it reproduces the production values exactly. The table's Δt = 1/64 rows are therefore read from `{toy}_logscore.json` and `{toy}_W1.json`.
+With `--n_steps 64`, it reproduces the production values exactly. The table's Δt = 1/64 rows are therefore read from `{toy}_logscore.json` and `{toy}_W1.json`. The study was run for Δt = 1/32 and 1/128 on six toys (all but hetero), about 40 min on one GPU.
+
+For each toy and Δt, the table gives four values:
+- **Gap to the oracle**: oracle − SC-SI.
+- **Difference with 1/64**: SC-SI at Δt − SC-SI at 1/64. The oracle cancels in this difference.
+- **W1**: the average over the six statistics, median and mean over the test tasks.
+
+Both log-score columns are paired over the 10 validation pairs, as mean ± se.
+
+**Result**: every difference with 1/64 lies within one standard error, except iso-diag and AR(1) at 1/128. Those two are at about 2 se, but only 0.005 and 0.002 nat. The W1 values move by 0.001 to 0.005. Δt = 1/64 is converged.
+
+On the two IW toys, the log-score estimator is noisy: the importance ESS is 3 to 12 on some pairs, even with J=2·10⁶. A change of seed alone, at fixed Δt, gives paired differences of ± 0.17.
 
 ## Full pipeline for one toy
 

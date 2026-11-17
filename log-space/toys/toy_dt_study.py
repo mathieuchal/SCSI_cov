@@ -43,13 +43,13 @@ def summary(x):
     return {"mean": float(x.mean()), "se": float(x.std() / math.sqrt(len(x))), "per_task": [float(v) for v in x]}
 
 
-def logscore(toy, path, n_steps, n_val, J, seed, chunk, threads, device):
+def logscore(toy, path, n_steps, n_val, J, seed, chunk, threads, device, draw_seed=777):
     g = torch.Generator().manual_seed(1000 + seed)                     # validation pairs as toy_train.py draws them
     C_va = toy.sample_prior(n_val, g)
     Ce_cal = wishart_channel(C_va, toy.N, g).to(device)
     Ce_val = wishart_channel(C_va, toy.N, g).to(device)
     m, _ = load_scsi(toy, path, threads)
-    gm = torch.Generator(device=m.device).manual_seed(777)
+    gm = torch.Generator(device=m.device).manual_seed(draw_seed)
     with torch.no_grad():
         draw = lambda i: torch.cat([m.sample_posterior(Ce_cal[i:i + 1], min(200000, J - j), gen=gm, chunk=chunk, n_steps=n_steps)
                                     for j in range(0, J, 200000)], 1)
@@ -67,32 +67,35 @@ def w1(toy, path, n_steps, Ce, ref_stats, J, threads):
 
 
 def table(toys, out="figs/toy_dt_table.txt"):
-    """Per toy, one row per n_steps: log-score gap (oracle - SC-SI), W1 per statistic and average (median and mean)."""
+    """Per toy, one row per n_steps. Log-score: gap to the oracle (oracle - SC-SI) and paired difference with the
+    production n_steps=64 (SC-SI at Delta t - SC-SI at 1/64), both mean +- se over the validation pairs (same pairs for
+    every Delta t, so the large pair-to-pair variability cancels). W1: average over the six statistics, median and mean
+    over the test tasks."""
     name = dict((t, n) for n, t in ROWS)
-    blocks = []
-    for agg in ("median", "mean"):
-        lines = [f"% SC-SI at best_k vs SDE time step Delta t = 1/n_steps (Euler-Maruyama). log-score gap = oracle - SC-SI "
-                 f"(J=2e6, 10 pairs); W1 / oracle sd, {agg} over 128 test tasks (J=1024). n_steps=64: production values.",
-                 r"\begin{tabular}{@{}llcccccccc@{}}", r"    \toprule",
-                 r"    Prior & $\Delta t$ & log-score & $\log\det C$ & $\log\kappa$ & top share & $\mathrm{dv}_{\mathrm{top}}$ & "
-                 r"$\mathrm{dv}_{\mathrm{bot}}$ & $C_{01}$ & avg \\", r"    \midrule"]
-        for i, toy in enumerate(toys):
-            L = json.load(open(f"{R}/{toy}_logscore.json")); W = json.load(open(f"{R}/{toy}_W1.json"))
-            D = json.load(open(f"{R}/{toy}_dt.json"))
-            orc = L["oracle_exact"] if "oracle_exact" in L else L["oracle"]
-            rows = {int(n): v for n, v in D["n_steps"].items()}
-            rows.setdefault(64, {"logscore": L["scsi"], "W1": {a: W[a]["scsi"] for a in AGGS}})
-            if i:
-                lines.append(r"    \midrule")
-            for j, n in enumerate(sorted(rows)):
-                v = rows[n]
-                gap = -paired(v["logscore"], orc)[0]
-                det = v["W1"][agg]["detail"]
-                cells = [f"{gap + 0.0:.2f}"] + [("--" if not math.isfinite(det[s]["w1"]) else f"{det[s]['w1']:.2f}") for s in STATS] \
-                        + [f"{v['W1'][agg]['value']:.3f}"]
-                lines.append(f"    {name.get(toy, toy) if j == 0 else ''} & $1/{n}$ & " + " & ".join(cells) + r" \\")
-        blocks.append("\n".join(lines + [r"    \bottomrule", r"\end{tabular}"]))
-    txt = "\n\n".join(blocks).replace("-0.00", "0.00") + "\n"
+    pm = lambda m, se, dg=2: rf"${m + 0.0:+.{dg}f} \pm {se:.{dg}f}$"
+    tex = [r"% SC-SI at best_k vs SDE time step Delta t = 1/n_steps (Euler-Maruyama); n_steps=64 = production.",
+           r"% log-score (J=2e6, 10 validation pairs): gap = oracle - SC-SI, diff = SC-SI(Delta t) - SC-SI(1/64), paired, mean +- se.",
+           r"% W1 / oracle sd, average over the six statistics, median / mean over 128 test tasks (J=1024).",
+           r"\begin{tabular}{@{}llcccc@{}}", r"    \toprule",
+           r"    Prior & $\Delta t$ & gap to oracle & diff.\ vs $1/64$ & W1 (median) & W1 (mean) \\", r"    \midrule"]
+    md = ["| Prior | Δt | gap to oracle | diff. vs 1/64 | W1 (median) | W1 (mean) |", "|---|---|---|---|---|---|"]
+    for i, toy in enumerate(toys):
+        L = json.load(open(f"{R}/{toy}_logscore.json")); W = json.load(open(f"{R}/{toy}_W1.json"))
+        D = json.load(open(f"{R}/{toy}_dt.json"))
+        orc = L["oracle_exact"] if "oracle_exact" in L else L["oracle"]
+        rows = {int(n): v for n, v in D["n_steps"].items()}
+        rows.setdefault(64, {"logscore": L["scsi"], "W1": {ag: W[ag]["scsi"] for ag in AGGS}})
+        if i:
+            tex.append(r"    \midrule")
+        for j, n in enumerate(sorted(rows)):
+            v = rows[n]
+            g, gse = paired(orc, v["logscore"])
+            diff = "--" if n == 64 else pm(*paired(v["logscore"], rows[64]["logscore"]), 3)
+            cells = [pm(g, gse), diff, f"{v['W1']['median']['value']:.3f}", f"{v['W1']['mean']['value']:.3f}"]
+            lab = name.get(toy, toy) if j == 0 else ""
+            tex.append(f"    {lab} & $1/{n}$ & " + " & ".join(cells) + r" \\")
+            md.append(f"| {lab} | 1/{n} | " + " | ".join(c.replace("$", "").replace(r"\pm", "±") for c in cells) + " |")
+    txt = "\n".join(tex + [r"    \bottomrule", r"\end{tabular}"]) + "\n\n" + "\n".join(md) + "\n"
     open(out, "w").write(txt)
     print(txt); print("wrote", out)
 
