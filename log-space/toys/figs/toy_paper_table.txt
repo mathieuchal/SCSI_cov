@@ -1,0 +1,69 @@
+% W1 / oracle sd, median over the 128 test tasks; log-score gap = oracle - method (J=2e6, 10 pairs)
+%   IW, RI: iw_ri_d8_inf_mlp_w512_d4, k=1000
+%   IW, non-RI: iw_nonri_d8_inf_mlp_w512_d4, k=1000
+%   Factor model: factor_d8_inf_mlp_w512_d4, k=1000
+%   Iso-Diagonal: iso_diag_d8_inf_mlp_w1024_d4, k=1000
+%   AR(1): ar1_d8_inf_resnet_w1024_d4, k=2000
+%   Diagonal: diag_d8_inf_mlp_w512_d4, k=1000
+%   Heteroskedastic: hetero_d8_inf_mlp_w512_d4, k=1000
+\begin{tabular}{@{}llcccccccc@{}}
+    \toprule
+    Prior & Method & log-score & $\log\det C$ & $\log\kappa$ & top share & $\mathrm{dv}_{\mathrm{top}}$ & $\mathrm{dv}_{\mathrm{bot}}$ & $C_{01}$ & avg \\
+    \midrule
+    IW, RI & \scsi{} & 0.27 & 0.06 & 0.08 & 0.08 & 0.07 & 0.07 & \textbf{0.05} & 0.066 \\
+     & IW-ML & \textbf{0.00} & \textbf{0.04} & \textbf{0.05} & \textbf{0.05} & \textbf{0.05} & \textbf{0.05} & \textbf{0.05} & \textbf{0.046} \\
+    \midrule
+    IW, non-RI & \scsi{} & 0.26 & 0.06 & 0.06 & \textbf{0.05} & \textbf{0.05} & 0.07 & 0.05 & 0.057 \\
+     & IW-ML & \textbf{0.00} & \textbf{0.04} & \textbf{0.04} & \textbf{0.05} & \textbf{0.05} & \textbf{0.05} & \textbf{0.04} & \textbf{0.046} \\
+    \midrule
+    Factor model & \scsi{} & \textbf{0.54} & \textbf{0.09} & \textbf{0.20} & \textbf{0.08} & \textbf{0.07} & \textbf{0.24} & \textbf{0.09} & \textbf{0.129} \\
+     & IW-ML & 2.70 & 0.22 & 0.86 & 0.49 & 0.64 & 1.23 & 0.41 & 0.643 \\
+    \midrule
+    Iso-Diagonal & \scsi{} & \textbf{-0.05} & \textbf{0.06} & \textbf{0.29} & \textbf{0.40} & \textbf{0.14} & \textbf{0.14} & \textbf{0.07} & \textbf{0.183} \\
+     & IW-ML & 0.62 & 0.41 & 3.74 & 4.01 & 1.64 & 1.12 & 0.53 & 1.910 \\
+    \midrule
+    AR(1) & \scsi{} & \textbf{0.00} & \textbf{0.11} & \textbf{0.20} & \textbf{0.12} & \textbf{0.38} & \textbf{0.30} & \textbf{0.19} & \textbf{0.217} \\
+     & IW-ML & 9.72 & 3.05 & 4.51 & 3.12 & 4.98 & 6.39 & 2.48 & 4.088 \\
+    \midrule
+    Diagonal & \scsi{} & \textbf{0.08} & \textbf{0.07} & \textbf{0.19} & \textbf{0.14} & \textbf{0.14} & \textbf{0.21} & -- & \textbf{0.147} \\
+     & IW-ML & 5.06 & 0.76 & 0.66 & 0.71 & 0.63 & 1.20 & -- & 0.792 \\
+    \midrule
+    Heteroskedastic & \scsi{} & \textbf{0.45} & \textbf{0.10} & \textbf{0.15} & \textbf{0.08} & \textbf{0.09} & \textbf{0.31} & \textbf{0.09} & \textbf{0.137} \\
+     & IW-ML & 1.97 & 0.20 & 0.74 & 0.24 & 0.21 & 1.02 & 0.16 & 0.429 \\
+    \bottomrule
+\end{tabular}
+
+% W1 / oracle sd, mean over the 128 test tasks; log-score gap = oracle - method (J=2e6, 10 pairs)
+%   IW, RI: iw_ri_d8_inf_mlp_w512_d4, k=1000
+%   IW, non-RI: iw_nonri_d8_inf_mlp_w512_d4, k=1000
+%   Factor model: factor_d8_inf_mlp_w512_d4, k=1000
+%   Iso-Diagonal: iso_diag_d8_inf_mlp_w1024_d4, k=1000
+%   AR(1): ar1_d8_inf_resnet_w1024_d4, k=2000
+%   Diagonal: diag_d8_inf_mlp_w512_d4, k=1000
+%   Heteroskedastic: hetero_d8_inf_mlp_w512_d4, k=1000
+\begin{tabular}{@{}llcccccccc@{}}
+    \toprule
+    Prior & Method & log-score & $\log\det C$ & $\log\kappa$ & top share & $\mathrm{dv}_{\mathrm{top}}$ & $\mathrm{dv}_{\mathrm{bot}}$ & $C_{01}$ & avg \\
+    \midrule
+    IW, RI & \scsi{} & 0.27 & 0.07 & 0.09 & 0.08 & 0.07 & 0.08 & 0.06 & 0.075 \\
+     & IW-ML & \textbf{0.00} & \textbf{0.05} & \textbf{0.05} & \textbf{0.05} & \textbf{0.05} & \textbf{0.05} & \textbf{0.05} & \textbf{0.050} \\
+    \midrule
+    IW, non-RI & \scsi{} & 0.26 & 0.07 & 0.07 & 0.06 & 0.06 & 0.08 & 0.06 & 0.066 \\
+     & IW-ML & \textbf{0.00} & \textbf{0.05} & \textbf{0.05} & \textbf{0.05} & \textbf{0.05} & \textbf{0.05} & \textbf{0.05} & \textbf{0.049} \\
+    \midrule
+    Factor model & \scsi{} & \textbf{0.54} & \textbf{0.10} & \textbf{0.22} & \textbf{0.10} & \textbf{0.09} & \textbf{0.33} & \textbf{0.12} & \textbf{0.160} \\
+     & IW-ML & 2.70 & 0.25 & 0.98 & 0.55 & 0.72 & 1.40 & 0.47 & 0.730 \\
+    \midrule
+    Iso-Diagonal & \scsi{} & \textbf{-0.05} & \textbf{0.07} & \textbf{0.30} & \textbf{0.56} & \textbf{0.17} & \textbf{0.14} & \textbf{0.07} & \textbf{0.221} \\
+     & IW-ML & 0.62 & 0.45 & 3.74 & 4.19 & 1.80 & 1.11 & 0.59 & 1.980 \\
+    \midrule
+    AR(1) & \scsi{} & \textbf{0.00} & \textbf{0.15} & \textbf{0.23} & \textbf{0.14} & \textbf{1.78} & \textbf{0.34} & \textbf{0.21} & \textbf{0.474} \\
+     & IW-ML & 9.72 & 4.58 & 5.78 & 8.31 & 15.08 & 7.98 & 11.54 & 8.879 \\
+    \midrule
+    Diagonal & \scsi{} & \textbf{0.08} & \textbf{0.08} & \textbf{0.19} & \textbf{0.14} & \textbf{0.14} & \textbf{0.20} & -- & \textbf{0.151} \\
+     & IW-ML & 5.06 & 0.83 & 0.85 & 0.81 & 0.83 & 1.44 & -- & 0.953 \\
+    \midrule
+    Heteroskedastic & \scsi{} & \textbf{0.45} & \textbf{0.13} & \textbf{0.19} & \textbf{0.10} & \textbf{0.11} & \textbf{0.39} & \textbf{0.12} & \textbf{0.175} \\
+     & IW-ML & 1.97 & 0.21 & 0.78 & 0.24 & 0.21 & 1.20 & 0.22 & 0.477 \\
+    \bottomrule
+\end{tabular}
