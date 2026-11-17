@@ -2,11 +2,11 @@
 EM outer iteration k -- one column per toy, two separate y-axes (no dual axis).
 
 Inputs
-  log-score (toy_oracle_log_score.py, J=2e6, 10 validation pairs): SC-SI trajectory = "val_curve" of the run's
+  log-score (toy_logscore_oracle.py / toy_logscore_scsi.py, J=2e6, 10 validation pairs): SC-SI trajectory = "val_curve" of the run's
              results/toys_M=-1/{toy}_{TAGS[toy]}_train.json; oracle and IW-ML from results/toys_M=-1/{toy}_logscore.json
              (the oracle is the closed form for the IW toys, HMC/grid Monte-Carlo at the same J otherwise)
   W1 (default median over the test tasks, --mean the mean): SC-SI trajectory = "w1_curve_median" / "w1_curve_mean"
-             of the run's _train.json (toy_W1_mean.py); IW-ML from results/toys_M=-1/{toy}_W1.json (toy_eval.py).
+             of the run's _train.json (toy_W1_scsi.py); IW-ML from results/toys_M=-1/{toy}_W1.json (toy_W1_oracle.py).
 
     python toy_logscore_w1_curve.py               -> figs/logscore_w1_vs_k_d8.png
     python toy_logscore_w1_curve.py --no_hetero   -> figs/logscore_w1_vs_k_d8_nohetero.png
@@ -22,20 +22,19 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from plotstyle import *
+import paths
 
 setup()
-R = "results/toys_M=-1"
+R = paths.res_dir("inf")                 # M=inf runs: their log-score trajectory and oracle share the validation pairs
 TOYS = [("iw_ri_d8_inf", "IW, RI -- MLP-4 w512"), ("iw_nonri_d8_inf", "IW, non-RI -- MLP-4 w512"),
         ("factor_d8_inf", "Factor -- MLP-4 w512"), ("iso_diag_d8_inf", "Iso-diagonal -- MLP-4 w1024"),
         ("ar1_d8_inf", "AR(1) -- ResNet-4 w1024"), ("diag_d8_inf", "Diagonal -- MLP-4 w512"),
         ("hetero_d8_inf", "Heteroskedastic -- MLP-4 w512")]
 STATS = ["logdet", "logcond", "top_share", "ldv_top", "ldv_bot", "corr01"]
 # production run of each toy (its _train.json holds the log-score trajectory val_curve)
-TAGS = {"iw_ri_d8_inf": "mlp_w512_d4", "iw_nonri_d8_inf": "mlp_w512_d4", "factor_d8_inf": "mlp_w512_d4",
-        "hetero_d8_inf": "mlp_w512_d4", "diag_d8_inf": "mlp_w512_d4", "iso_diag_d8_inf": "mlp_w1024_d4",
-        "ar1_d8_inf": "resnet_w1024_d4"}
+TAGS = paths.tags("inf")
 # common checkpoint grid for every toy (the AR1 ResNet one): 24, 60, 100..1000 by 40, then 1100..2000 by 100
-GRID = {24, 60, *range(100, 1001, 40), 1000, *range(1100, 2001, 100)}
+GRID = set(paths.GRID)                   # plotted checkpoints: the evaluation grid, and every k < 24
 COL_W = 2.35                    # inches per toy column (was 3.3): compact horizontally
 IW_EXACT_EXPECTED = -0.0010    # E[IW-ML - oracle] for iw_ri / iw_nonri d8 (closed form, 20000 pairs)
 LS_MAIN, LS_STRIP = (-3.4, 0.3), (-10.5, -3.4)   # shared log-score y-ranges (main panel, strip below the break)
@@ -43,7 +42,7 @@ W1_MAIN, W1_STRIP = (0.0, 0.9), (0.9, 4.6)       # shared W1 y-ranges, linear (m
 
 
 def w1_case(x, ref):
-    """per-test-case W1 / sd(ref), as toy_eval.w1_norm."""
+    """per-test-case W1 / sd(ref), as w1.w1_norm."""
     sd = ref.std(1)
     w = np.array([sps.wasserstein_distance(x[m], ref[m]) for m in range(x.shape[0])])
     return np.where(sd > 0, w / np.where(sd > 0, sd, 1.0), np.nan)       # degenerate stat (e.g. corr01 on diag): nan
@@ -54,7 +53,7 @@ def paired(a, b):
     return x.mean(), x.std(ddof=1) / math.sqrt(len(x))
 
 
-def main(J=2000000, n_val=10, out="figs/logscore_w1_vs_k_d8.png", agg="median", toys=None):
+def main(J=2000000, n_val=10, out=f"{paths.figs_dir('inf')}/logscore_w1_vs_k_d8.png", agg="median", toys=None):
     TOYS = toys if toys is not None else globals()["TOYS"]
     fig, axs = plt.subplots(2, len(TOYS), figsize=(COL_W * len(TOYS), 4.8), sharex="col",
                             gridspec_kw={"height_ratios": [1, 0.9]})
@@ -147,8 +146,8 @@ def main(J=2000000, n_val=10, out="figs/logscore_w1_vs_k_d8.png", agg="median", 
 
 if __name__ == "__main__":
     if "--no_hetero" in sys.argv:                # same figure without the heteroskedastic toy
-        main(out="figs/logscore_w1_vs_k_d8_nohetero.png", toys=[t for t in TOYS if t[0] != "hetero_d8_inf"])
+        main(out=f"{paths.figs_dir('inf')}/logscore_w1_vs_k_d8_nohetero.png", toys=[t for t in TOYS if t[0] != "hetero_d8_inf"])
     elif "--mean" in sys.argv:                     # old aggregation (mean over test cases)
-        main(out="figs/logscore_w1_vs_k_d8_meanW1.png", agg="mean")
+        main(out=f"{paths.figs_dir('inf')}/logscore_w1_vs_k_d8_meanW1.png", agg="mean")
     else:
         main()

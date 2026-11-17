@@ -316,7 +316,7 @@ class WishartToy:
 
     def __init__(self, name, p, N, M, nu0=None):
         self.name, self.p, self.N, self.M = name, p, N, M
-        self.d = p                                                    # alias: toy_train.py/toy_eval.py expect `.d`
+        self.d = p                                                    # alias: toy_train.py and the evaluation scripts expect `.d`
         self.nu0 = nu0 if nu0 is not None else p + 10
         tri = torch.tril_indices(p, p, offset=-1)
         self.tri_i, self.tri_j = tri[0], tri[1]
@@ -429,7 +429,7 @@ class SpikedModelToy:
         if spike_mean < spike_std or D_mean <= D_std:
             raise ValueError("need spike_mean >= spike_std and D_mean > D_std (same guard as sample_spiked)")
         self.name, self.p, self.N, self.M, self.r = name, p, N, M, r
-        self.d = p                                                    # alias: toy_train.py/toy_eval.py expect `.d`
+        self.d = p                                                    # alias: toy_train.py and the evaluation scripts expect `.d`
         self.spike_mean, self.spike_std = spike_mean, spike_std
         self.D_mean, self.D_std = D_mean, D_std
         self.spike_a, self.spike_b = spike_mean - spike_std, spike_mean + spike_std
@@ -547,14 +547,14 @@ class SpikedModelToy:
 # --------------------------------------------------------------------------- #
 
 class AR1Toy:
-    # not conjugate, but toy_eval.get_reference dispatches on `exact` to decide ref_posterior() vs
+    # not conjugate, but w1.get_reference dispatches on `exact` to decide ref_posterior() vs
     # hmc(): AR1Toy only has the former (direct quadrature sampler, no MCMC/R-hat needed), so this
     # must be True for that dispatch to call the right method.
     exact = True
 
     def __init__(self, name, p, N, M, rho_min=0.3, rho_max=1.0, n_grid=4001):
         self.name, self.p, self.N, self.M = name, p, N, M
-        self.d = p                                                    # alias: toy_train.py/toy_eval.py expect `.d`
+        self.d = p                                                    # alias: toy_train.py and the evaluation scripts expect `.d`
         self.rho_min, self.rho_max, self.n_grid = rho_min, rho_max, n_grid
         self._idx_diff = None                                         # lazily built (p,p) |i-j| matrix, cached per device/dtype
 
@@ -615,7 +615,7 @@ class HeteroskedasticToy:
 
     def __init__(self, name, p, N, M, r=5, scale_min=1.0, scale_max=4.0, d_min=0.5, d_max=5.0):
         self.name, self.p, self.N, self.M, self.r = name, p, N, M, r
-        self.d = p                                                    # alias: toy_train.py/toy_eval.py expect `.d`
+        self.d = p                                                    # alias: toy_train.py and the evaluation scripts expect `.d`
         self.scale_min, self.scale_max = scale_min, scale_max
         self.d_min, self.d_max = d_min, d_max
 
@@ -729,7 +729,7 @@ class DiagToy:
 
     def __init__(self, name, p, N, M, lmean=0.0, lstd=0.5):
         self.name, self.p, self.N, self.M = name, p, N, M
-        self.d = p                                                    # alias: toy_train.py/toy_eval.py expect `.d`
+        self.d = p                                                    # alias: toy_train.py and the evaluation scripts expect `.d`
         self.lmean, self.lstd = lmean, lstd
 
     def sample_prior(self, n, gen=None):
@@ -868,7 +868,7 @@ class IsoDiagToy:
         if spike_mean < spike_std:
             raise ValueError("need spike_mean >= spike_std (same guard as sample_spiked)")
         self.name, self.p, self.N, self.M = name, p, N, M
-        self.d = p                                                    # alias: toy_train.py/toy_eval.py expect `.d`
+        self.d = p                                                    # alias: toy_train.py and the evaluation scripts expect `.d`
         self.r = p   # always full rank -- no diagonal floor to support r<p
         self.spike_mean, self.spike_std = spike_mean, spike_std
         self.spike_a, self.spike_b = spike_mean - spike_std, spike_mean + spike_std

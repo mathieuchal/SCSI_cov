@@ -2,9 +2,9 @@
 (the production run at its best_k) and IW-ML.
 
 Inputs (no computation, only reads):
-  results/toys_M=-1/{toy}_logscore.json   (toy_oracle_log_score.py): per-pair log-scores of the oracle, IW-ML and SC-SI at
+  results/toys_M=-1/{toy}_logscore.json   (toy_logscore_oracle.py, toy_logscore_scsi.py): per-pair log-scores of the oracle, IW-ML and SC-SI at
                                      best_k (J=2e6, 10 validation pairs)
-  results/toys_M=-1/{toy}_W1.json         (toy_eval.py): W1 / oracle sd per statistic, mean or median over the 128 test tasks
+  results/toys_M=-1/{toy}_W1.json         (toy_W1_oracle.py, toy_W1_scsi.py): W1 / oracle sd per statistic, mean or median over the 128 test tasks
 
 Columns: log-score gap = oracle - method (nats per task, paired over the validation pairs; lower is better, negative =
 above the oracle), then the six W1 statistics and their average ("avg"; corr01 is "--" for the diagonal toy, whose
@@ -14,12 +14,14 @@ oracle at the same J otherwise. For the IW toys the IW-ML gap is the closed-form
 column, at the printed precision.
 
     python toy_paper_table.py                 -> figs/toy_paper_table.txt (LaTeX rows, W1 median and W1 mean tables)
+    python toy_paper_table.py --data M5000    -> figs_M=5000/toy_paper_table.txt (the M=5000 runs present)
     python toy_paper_table.py --no_hetero     (leave out the heteroskedastic toy)
 """
-import argparse, json, math
+import argparse, json, math, os
 from toy_logscore_w1_curve import IW_EXACT_EXPECTED, paired
+import paths
 
-R = "results/toys_M=-1"
+R = paths.res_dir("inf")
 STATS = ["logdet", "logcond", "top_share", "ldv_top", "ldv_bot", "corr01"]
 HEAD = ["log-score", r"$\log\det C$", r"$\log\kappa$", "top share", r"$\mathrm{dv}_{\mathrm{top}}$",
         r"$\mathrm{dv}_{\mathrm{bot}}$", r"$C_{01}$", "avg"]
@@ -72,9 +74,14 @@ def table(agg, rows):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--no_hetero", action="store_true")
-    ap.add_argument("--out", default="figs/toy_paper_table.txt")
+    paths.add_data_arg(ap)
+    ap.add_argument("--out", default=None, help="default {figs folder of --data}/toy_paper_table.txt")
     a = ap.parse_args()
-    rows = [r for r in ROWS if not (a.no_hetero and r[1] == "hetero_d8_inf")]
+    R = paths.res_dir(a.data)
+    a.out = a.out or f"{paths.figs_dir(a.data)}/toy_paper_table.txt"
+    rows = [(n, paths.toy_name(paths.base(t), a.data)) for n, t in ROWS if not (a.no_hetero and t == "hetero_d8_inf")]
+    rows = [(n, t) for n, t in rows if os.path.exists(f"{R}/{t}_logscore.json") and os.path.exists(f"{R}/{t}_W1.json")]
+    os.makedirs(os.path.dirname(a.out), exist_ok=True)
     txt = "\n\n".join(table(agg, rows) for agg in ("median", "mean")) + "\n"
     open(a.out, "w").write(txt)
     print(txt)

@@ -16,7 +16,7 @@ run () {   # toy tag [extra toy_train args]
   T=$1; TAG=$2; shift 2; S=${T}_${TAG}
   if [ -f $O/${S}_train.json ]; then echo "=== $S already trained, skipped"; return; fi
   echo "=== $S (k=0..700)  $(date -u)"
-  python toy_train.py --toy $T --tag $TAG --out_dir $O "$@" > $L/${S}_train.log 2>&1
+  python toy_train.py --toy $T --tag $TAG "$@" > $L/${S}_train.log 2>&1
   echo "=== $S done  $(date -u)"
 }
 

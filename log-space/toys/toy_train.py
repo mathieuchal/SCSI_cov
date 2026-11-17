@@ -22,6 +22,7 @@ import numpy as np, torch
 from scsi import SCSI, SCSIConfig, Sym, wishart_channel, DT
 from covutils import posterior_predictive_logscore
 from toys import make_toy
+import paths
 
 
 if __name__=='__main__':
@@ -56,8 +57,6 @@ if __name__=='__main__':
                      help="best_k = the LAST checkpoint (saved as _model.pt) instead of the best-validation one. "
                           "Imposed in infinite-data mode (toy.M == -1: no overfitting, and the J=64 validation score is "
                           "too noisy to select on)")
-    ap.add_argument("--out_dir", default="results/toys_M=-1", help="output folder of the checkpoints, _model.pt and _train.json "
-                                                                "(results/toys_M=5000 for the finite-data M=5000 runs)")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu", help="SCSIConfig.device")
     a = ap.parse_args()
     torch.set_num_threads(a.threads)
@@ -65,6 +64,7 @@ if __name__=='__main__':
     if toy.M == -1:                        # infinite data: best_k = the last checkpoint, imposed
         a.last_checkpoint = True
     stem = toy.name + (f"_{a.tag}" if a.tag else "")
+    a.out_dir = paths.res_dir(toy.name)                  # results/toys_M=-1 (M=inf toys) or results/toys_M=5000 (paths.py)
     d, N = toy.d, toy.N
     g = torch.Generator().manual_seed(1000 + a.seed)
     infinite = (toy.M == -1)
@@ -89,7 +89,7 @@ if __name__=='__main__':
         # a fresh run draws it from g as before (identical stream).
         gd = torch.Generator().manual_seed(1000 + a.seed) if resume_ckpt is not None else g
         C_tr = toy.sample_prior(toy.M, gd); Ce_tr = wishart_channel(C_tr, N, gd); del C_tr
-    # Validation dataset. Drawn from g after the training data: toy_oracle_log_score.py replays this exact sequence to
+    # Validation dataset. Drawn from g after the training data: toy_data.val_pairs replays this exact sequence to
     # rebuild the same validation pairs, so keep the order and sizes of these draws unchanged.
     C_val = toy.sample_prior(a.n_val, g);
     Ce_cal = wishart_channel(C_val, N, g); Ce_val = wishart_channel(C_val, N, g)

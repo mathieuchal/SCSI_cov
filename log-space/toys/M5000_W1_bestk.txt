@@ -1,0 +1,71 @@
+d=8 toys, finite data M=5000: W1 / oracle sd per statistic at best_k (2026-11-17)
+================================================================================
+
+Runs      : results/toys_M=5000/{toy}_d8_M5000_mlp_w512_d4 (MLP-4 w512, one training stage k=0..700, cosine outer lr)
+best_k    : argmax of the SC-SI predictive log-score over the 45 checkpoints (toy_logscore_scsi.py --J 200000: J=2e5, 10 validation
+            pairs drawn independently of the training, Generator(2000)) -> iw_nonri k=8, factor k=12, diag k=100
+W1        : toy_W1_oracle.py / toy_W1_scsi.py --data M5000: 128 test tasks, J=1024, HMC reference of the M=inf toy (same
+            prior, N and test set), IW-ML fitted on the same 5000 training Ce as SC-SI (Generator(1000))
+Tables    : figs_M=5000/toy_w1_table_{mean,median}.{md,tex} (toy_w1_tables.py --data M5000
+            ); bold = better of SC-SI / IW-ML
+
+
+W1 mean over the 128 test tasks
+-------------------------------
+| Toy              | Method | logdet | logcond | top_share | ldv_top | ldv_bot | corr01 | avg   |
+|------------------|--------|--------|---------|-----------|---------|---------|--------|-------|
+| IW, non-RI (k=8) | SC-SI  | 0.17   | 0.17    | 0.15      | 0.18    | 0.23    | 0.14   | 0.173 |
+|                  | IW-ML  | 0.05*  | 0.05*   | 0.05*     | 0.05*   | 0.05*   | 0.05*  | 0.049*|
+| Factor (k=12)    | SC-SI  | 0.26   | 0.50*   | 0.26*     | 0.28*   | 0.90*   | 0.31*  | 0.419*|
+|                  | IW-ML  | 0.25*  | 0.98    | 0.55      | 0.72    | 1.40    | 0.47   | 0.730 |
+| Diagonal (k=100) | SC-SI  | 0.17*  | 0.40*   | 0.29*     | 0.30*   | 0.50*   | --     | 0.331*|
+|                  | IW-ML  | 0.83   | 0.85    | 0.81      | 0.83    | 1.44    | --     | 0.953 |
+
+W1 median over the 128 test tasks
+---------------------------------
+| Toy              | Method | logdet | logcond | top_share | ldv_top | ldv_bot | corr01 | avg   |
+|------------------|--------|--------|---------|-----------|---------|---------|--------|-------|
+| IW, non-RI (k=8) | SC-SI  | 0.14   | 0.14    | 0.11      | 0.13    | 0.17    | 0.11   | 0.135 |
+|                  | IW-ML  | 0.04*  | 0.04*   | 0.05*     | 0.05*   | 0.05*   | 0.04*  | 0.046*|
+| Factor (k=12)    | SC-SI  | 0.20*  | 0.46*   | 0.23*     | 0.21*   | 0.77*   | 0.26*  | 0.355*|
+|                  | IW-ML  | 0.22   | 0.86    | 0.49      | 0.64    | 1.23    | 0.41   | 0.643 |
+| Diagonal (k=100) | SC-SI  | 0.13*  | 0.42*   | 0.28*     | 0.28*   | 0.47*   | --     | 0.317*|
+|                  | IW-ML  | 0.76   | 0.66    | 0.71      | 0.63    | 1.20    | --     | 0.792 |
+(* = better of the two methods; corr01 undefined for the diagonal toy, whose reference has zero sd there)
+
+For comparison, M=inf (k=1000) W1 mean, avg over statistics: SC-SI iw_nonri 0.066, factor 0.160, diag 0.151.
+
+Selection check (W1 trajectory, toy_W1_scsi.py --data M5000, every checkpoint)
+-------------------------------------------------------------------------------------------
+| run      | best_k (log-score) | W1 mean at best_k | min of W1 mean     | W1 mean at k=700 |
+|----------|--------------------|-------------------|--------------------|------------------|
+| iw_nonri | 8                  | 0.173             | k=8   : 0.173      | 0.596            |
+| factor   | 12                 | 0.419             | k=16  : 0.403      | 0.660            |
+| diag     | 100                | 0.331             | k=120 : 0.323      | 0.439            |
+
+
+Ce qu'on en retient
+-------------------
+- Sélection : le maximum du log-score tombe au minimum du W1, ou à quelques itérations près (factor k=12 contre 16,
+  diag k=100 contre 120, pour un W1 moyen à peine meilleur : 0.016 et 0.008). Choisir best_k par le log-score ne
+  coûte presque rien en W1.
+- Surapprentissage : avec 5000 données fixes, le log-score culmine très tôt (k=8 à 12 pour iw_nonri et factor, k=100
+  pour diag) puis redescend ; le W1 moyen se dégrade fortement ensuite (iw_nonri 0.17 -> 0.60 à k=700, factor
+  0.42 -> 0.66). Au best_k, le W1 moyen reste 2,2 à 2,6 fois plus élevé qu'en M=inf.
+- Factor et diag : malgré le surapprentissage, SC-SI à M=5000 reste nettement meilleur qu'IW-ML (W1 moyen 0.42 contre
+  0.73 sur factor, 0.33 contre 0.95 sur diag), surtout sur les statistiques liées au spectre (logcond, ldv_bot).
+- IW non-RI : IW-ML est le modèle exact et reste 3,5 fois meilleur que SC-SI (0.05 contre 0.17) ; en M=inf, SC-SI
+  arrivait presque à son niveau (0.066).
+- IW-ML est identique entre M=inf et M=5000 (0.730 sur factor, 0.953 sur diag) : en M=inf il était déjà ajusté sur
+  les 5000 Ce tirés avec Generator(1000), c'est-à-dire exactement l'ensemble d'entraînement des runs M=5000. La
+  baseline voit les mêmes données dans les deux cas ; seul SC-SI change.
+- Log-score au best_k (toy_logscore_oracle.py et toy_logscore_scsi.py --ks best : J=2e6, 10 paires de rapport Generator(2001), distinctes des paires
+  de sélection Generator(2000), donc sans biais de sélection). Écart apparié oracle - méthode, moyenne ± se :
+    iw_nonri  SC-SI +0.62 ± 0.22   IW-ML +0.05 ± 0.15  (oracle exact ; dans la table, IW-ML = constante -0.001 de
+                                                        IW_EXACT_EXPECTED, valable car l'ajustement IW-ML est le même)
+    factor    SC-SI +1.88 ± 0.58   IW-ML +3.11 ± 0.81  (oracle HMC)
+    diag      SC-SI +0.76 ± 0.25   IW-ML +6.53 ± 1.15  (oracle HMC)
+  En M=inf (k=1000) : SC-SI iw_nonri +0.26, factor +0.54, diag +0.08. Le surapprentissage coûte donc aussi en
+  log-score (2 à 10 fois plus d'écart à l'oracle), mais SC-SI reste devant IW-ML sur factor et diag.
+  Table complète du papier (log-score + W1 par statistique) : figs_M=5000/toy_paper_table.txt
+  (python toy_paper_table.py --data M5000).
