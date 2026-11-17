@@ -1,0 +1,1 @@
+Do not forget to delete the remote branch "main". I don't have permissions for that.
