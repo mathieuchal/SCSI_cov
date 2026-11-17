@@ -1,0 +1,11 @@
+__pycache__/
+*.pt
+
+# results/: everything ignored except JSON summaries and the directory structure itself
+results/**
+!results/**/*.json
+!results/**/
+
+# disposable resumability caches (see log_score_scsi.py/_full_curve, toy_W1_mean.py's w1_mean_dict) --
+# auto-deleted after merge, never meant to be committed even transiently
+*_cache.json
