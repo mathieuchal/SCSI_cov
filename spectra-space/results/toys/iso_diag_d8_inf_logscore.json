@@ -1,0 +1,20 @@
+{
+ "toy": "iso_diag_d8_inf",
+ "n_val": 10,
+ "J": 200000,
+ "exact_reference": false,
+ "oracle": {
+  "value": -336.7046172028302,
+  "ess_ratio": 0.02658178109841486
+ },
+ "iw_ml": {
+  "value": -337.32452483834606
+ },
+ "scsi": {
+  "tag": "spectral_follmer",
+  "value": -336.73301715690326,
+  "kbest": 240
+ },
+ "N": 40,
+ "d": 8
+}

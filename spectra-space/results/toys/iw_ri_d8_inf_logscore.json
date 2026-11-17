@@ -1,0 +1,19 @@
+{
+ "toy": "iw_ri_d8_inf",
+ "n_val": 10,
+ "J": 200000,
+ "exact_reference": true,
+ "oracle": {
+  "value": -130.6795390297585
+ },
+ "iw_ml": {
+  "value": -130.64781983881065
+ },
+ "scsi": {
+  "tag": "spectral_follmer",
+  "value": -130.81674593828384,
+  "kbest": 20
+ },
+ "N": 40,
+ "d": 8
+}

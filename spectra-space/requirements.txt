@@ -1,0 +1,13 @@
+# Known-working pins for this codebase (Python 3.11), verified together in one environment.
+#
+# IMPORTANT: install exactly these pins in one `pip install -r requirements.txt` call. In
+# particular, do not separately `pip install mne` without a version pin: recent mne (>=1.7) requires
+# numpy>=2.1, which breaks this torch build (torch.Tensor.numpy() raises "Numpy is not available").
+# mne==1.6.1 is the last release compatible with numpy 1.x, hence the pin below.
+numpy==1.26.4
+scipy==1.11.4
+matplotlib==3.8.0
+torch==2.2.2
+pandas==2.1.4
+scikit-learn==1.2.2
+mne==1.6.1

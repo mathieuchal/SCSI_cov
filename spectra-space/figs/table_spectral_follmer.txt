@@ -1,0 +1,9 @@
+=== spectral_follmer: iw_ri_d8_inf (IW, RI, N=40, d=8) ===
+  best_k = 20
+  log-score   oracle=-130.6795   iw_ml=-130.6478   scsi=-130.8167   gap= -0.1372
+  W1          floor=  0.0537   iw_ml=  0.0459   scsi=  0.0903
+
+=== spectral_follmer: iso_diag_d8_inf (Iso-diagonal, N=40, d=8) ===
+  best_k = 240
+  log-score   oracle=-336.7046   iw_ml=-337.3245   scsi=-336.7330   gap= -0.0284
+  W1          floor=  0.0527   iw_ml=  1.9085   scsi=  0.1931
