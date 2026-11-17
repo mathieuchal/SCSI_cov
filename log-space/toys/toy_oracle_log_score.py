@@ -15,10 +15,10 @@ toy.ref_posterior / toy.hmc return C, so no Cholesky factor appears anywhere.
                                                                    # 2000 HMC chains, the checkpoint grid)
     python toy_oracle_log_score.py --toys hetero_d8_inf --ks 100,500,1000
 Writes
-  results/toys/{toy}_logscore.json         the toy:  toy, n_val, J, N, d, and per method {mean, se, per_task, ess, sec}:
+  results/toys_M=-1/{toy}_logscore.json         the toy:  toy, n_val, J, N, d, and per method {mean, se, per_task, ess, sec}:
                                            oracle (+ diag of its sampler), oracle_exact (closed form, IW toys only),
                                            iw_ml, scsi (the production run, its "tag", at its best_k: "k")
-  results/toys/{stem}_train.json           the SC-SI run:  "val_curve": {k: mean log-score} (the trajectory),
+  results/toys_M=-1/{stem}_train.json           the SC-SI run:  "val_curve": {k: mean log-score} (the trajectory),
                                            "val_curve_n_val": n_val, "val_curve_J": J
 best_k is the run's own (toy_train.py: the last checkpoint with --last_checkpoint, imposed in infinite-data mode; else the best callback validation).
 Re-running resumes: checkpoints already in val_curve are skipped. best_k (the checkpoint selected by toy_train.py)
@@ -36,13 +36,13 @@ from toy_eval import load_scsi
 def load_train(stem):
     """{stem}_train.json; a file written before the val_curve -> val_curve_orig rename holds the toy_train callback
     curve under "val_curve": renamed here (that callback used toy_train's defaults n_val=300, J=64)."""
-    tr = json.load(open(f"results/toys/{stem}_train.json"))
+    tr = json.load(open(f"results/toys_M=-1/{stem}_train.json"))
     if "val_curve" in tr and "val_curve_orig" not in tr:
         tr = {**{"val_curve_orig": tr.pop("val_curve"), "val_curve_orig_n_val": 300, "val_curve_orig_J": 64}, **tr}
     return tr
 
 
-# d=8 runs: toy -> training stem tag (checkpoints results/toys/{toy}_{tag}_k{k}.pt)
+# d=8 runs: toy -> training stem tag (checkpoints results/toys_M=-1/{toy}_{tag}_k{k}.pt)
 TAGS = {"iw_ri_d8_inf": "mlp_w512_d4", "iw_nonri_d8_inf": "mlp_w512_d4", "factor_d8_inf": "mlp_w512_d4",
         "hetero_d8_inf": "mlp_w512_d4", "diag_d8_inf": "mlp_w512_d4", "iso_diag_d8_inf": "mlp_w1024_d4",
         "ar1_d8_inf": "resnet_w1024_d4"}
@@ -102,7 +102,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 for name in a.toys.split(","):
     tag = TAGS[name]
     stem = f"{name}_{tag}"
-    out_path = f"results/toys/{name}_logscore.json"
+    out_path = f"results/toys_M=-1/{name}_logscore.json"
     out = json.load(open(out_path)) if os.path.exists(out_path) else {}
     if out and (out["J"], out["n_val"]) != (a.J, a.n_val):
         raise ValueError(f"{out_path} holds J={out['J']}, n_val={out['n_val']}, not J={a.J}, n_val={a.n_val}")
@@ -169,14 +169,14 @@ for name in a.toys.split(","):
         tr["val_curve"] = {str(k): vc[k] for k in sorted(vc)}
         tr["val_curve_n_val"], tr["val_curve_J"] = a.n_val, a.J
         tr.pop("log_score_path", None)                         # older key: = val_curve[best_k]
-        json.dump(tr, open(f"results/toys/{stem}_train.json", "w"), indent=1)
+        json.dump(tr, open(f"results/toys_M=-1/{stem}_train.json", "w"), indent=1)
 
     if a.ks == "grid":
         GRID = [2, 4, 6, 8, 10, 12, 16, 20, 24, 60, *range(100, 1000, 40), 1000, *range(1100, 2001, 100)]
-        ks = [k for k in GRID if os.path.exists(f"results/toys/{stem}_k{k}.pt")]
+        ks = [k for k in GRID if os.path.exists(f"results/toys_M=-1/{stem}_k{k}.pt")]
     elif a.ks == "all":                                                              # every checkpoint saved on disk
         import re
-        ks = sorted(int(mm.group(1)) for f in os.listdir("results/toys") if (mm := re.fullmatch(rf"{stem}_k(\d+)\.pt", f)))
+        ks = sorted(int(mm.group(1)) for f in os.listdir("results/toys_M=-1") if (mm := re.fullmatch(rf"{stem}_k(\d+)\.pt", f)))
     elif a.ks == "last":
         ks = [max(int(k) for k in tr["val_curve_orig"])]
     elif a.ks == "auto":
@@ -189,7 +189,7 @@ for name in a.toys.split(","):
         scsi_ok = (out.get("scsi", {}).get("tag"), out.get("scsi", {}).get("k")) == (tag, k)
         if k in vc and not (k == tr["best_k"] and not scsi_ok):                    # best_k: full scsi entry needed
             continue
-        path = f"results/toys/{stem}_k{k}.pt"
+        path = f"results/toys_M=-1/{stem}_k{k}.pt"
         if not os.path.exists(path):
             print(f"  missing {path}", flush=True); continue
         t0 = time.time()

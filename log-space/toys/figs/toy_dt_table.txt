@@ -1,0 +1,37 @@
+% SC-SI at best_k vs SDE time step Delta t = 1/n_steps (Euler-Maruyama). log-score gap = oracle - SC-SI (J=2e6, 10 pairs); W1 / oracle sd, median over 128 test tasks (J=1024). n_steps=64: production values.
+\begin{tabular}{@{}llcccccccc@{}}
+    \toprule
+    Prior & $\Delta t$ & log-score & $\log\det C$ & $\log\kappa$ & top share & $\mathrm{dv}_{\mathrm{top}}$ & $\mathrm{dv}_{\mathrm{bot}}$ & $C_{01}$ & avg \\
+    \midrule
+    IW, non-RI & $1/32$ & 0.39 & 0.06 & 0.06 & 0.05 & 0.06 & 0.07 & 0.05 & 0.057 \\
+     & $1/64$ & 0.26 & 0.06 & 0.06 & 0.05 & 0.05 & 0.07 & 0.05 & 0.057 \\
+     & $1/128$ & 0.25 & 0.06 & 0.06 & 0.05 & 0.05 & 0.07 & 0.05 & 0.058 \\
+    \midrule
+    Factor model & $1/32$ & 0.50 & 0.08 & 0.19 & 0.08 & 0.07 & 0.24 & 0.10 & 0.128 \\
+     & $1/64$ & 0.54 & 0.09 & 0.20 & 0.08 & 0.07 & 0.24 & 0.09 & 0.129 \\
+     & $1/128$ & 0.58 & 0.10 & 0.20 & 0.08 & 0.08 & 0.24 & 0.10 & 0.131 \\
+    \midrule
+    Diagonal & $1/32$ & 0.08 & 0.07 & 0.18 & 0.14 & 0.13 & 0.20 & -- & 0.144 \\
+     & $1/64$ & 0.08 & 0.07 & 0.19 & 0.14 & 0.14 & 0.21 & -- & 0.147 \\
+     & $1/128$ & 0.08 & 0.07 & 0.19 & 0.14 & 0.13 & 0.21 & -- & 0.146 \\
+    \bottomrule
+\end{tabular}
+
+% SC-SI at best_k vs SDE time step Delta t = 1/n_steps (Euler-Maruyama). log-score gap = oracle - SC-SI (J=2e6, 10 pairs); W1 / oracle sd, mean over 128 test tasks (J=1024). n_steps=64: production values.
+\begin{tabular}{@{}llcccccccc@{}}
+    \toprule
+    Prior & $\Delta t$ & log-score & $\log\det C$ & $\log\kappa$ & top share & $\mathrm{dv}_{\mathrm{top}}$ & $\mathrm{dv}_{\mathrm{bot}}$ & $C_{01}$ & avg \\
+    \midrule
+    IW, non-RI & $1/32$ & 0.39 & 0.07 & 0.07 & 0.06 & 0.06 & 0.08 & 0.06 & 0.068 \\
+     & $1/64$ & 0.26 & 0.07 & 0.07 & 0.06 & 0.06 & 0.08 & 0.06 & 0.066 \\
+     & $1/128$ & 0.25 & 0.07 & 0.07 & 0.06 & 0.06 & 0.08 & 0.06 & 0.067 \\
+    \midrule
+    Factor model & $1/32$ & 0.50 & 0.10 & 0.22 & 0.10 & 0.09 & 0.33 & 0.12 & 0.159 \\
+     & $1/64$ & 0.54 & 0.10 & 0.22 & 0.10 & 0.09 & 0.33 & 0.12 & 0.160 \\
+     & $1/128$ & 0.58 & 0.10 & 0.22 & 0.10 & 0.09 & 0.33 & 0.12 & 0.162 \\
+    \midrule
+    Diagonal & $1/32$ & 0.08 & 0.08 & 0.18 & 0.14 & 0.14 & 0.20 & -- & 0.149 \\
+     & $1/64$ & 0.08 & 0.08 & 0.19 & 0.14 & 0.14 & 0.20 & -- & 0.151 \\
+     & $1/128$ & 0.08 & 0.08 & 0.19 & 0.14 & 0.14 & 0.20 & -- & 0.150 \\
+    \bottomrule
+\end{tabular}

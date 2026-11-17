@@ -9,7 +9,7 @@ posterior predictive log-score of Ce_val given Ce_cal.  No clean covariance is g
 Defaults = the d=8 production runs (MLP-4 w512, seed 0, m_inf 5000, 26 threads), stage 1 of the two-stage protocol:
     stage 1: python toy_train.py --toy TOY --tag mlp_w512_d4                       # cosine outer lr 5e-4 -> 1e-5, k=0..700
     stage 2: python toy_train.py --toy TOY --tag mlp_w512_d4 --n_outer 1000 \
-                 --resume results/toys/TOY_mlp_w512_d4_k700.pt                       # constant lr 5e-5 (--resume_lr), k=700..1000
+                 --resume results/toys_M=-1/TOY_mlp_w512_d4_k700.pt                       # constant lr 5e-5 (--resume_lr), k=700..1000
 Exceptions: iso_diag_d8_inf uses --hidden 1024 (tag mlp_w1024_d4); ar1_d8_inf uses --arch resnet --hidden 1024
 (tag resnet_w1024_d4) and a third stage, --n_outer 2000 --resume ..._k1000.pt (constant 5e-5, k=1000..2000).
 On --resume the architecture is read from the checkpoint, so --hidden/--arch need not be repeated.
@@ -56,6 +56,8 @@ if __name__=='__main__':
                      help="best_k = the LAST checkpoint (saved as _model.pt) instead of the best-validation one. "
                           "Imposed in infinite-data mode (toy.M == -1: no overfitting, and the J=64 validation score is "
                           "too noisy to select on)")
+    ap.add_argument("--out_dir", default="results/toys_M=-1", help="output folder of the checkpoints, _model.pt and _train.json "
+                                                                "(results/toys_M=5000 for the finite-data M=5000 runs)")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu", help="SCSIConfig.device")
     a = ap.parse_args()
     torch.set_num_threads(a.threads)
@@ -100,11 +102,11 @@ if __name__=='__main__':
                        1100, 1120, 1140, 1160, 1180, 1200, 1220, 1240, 1260, 1280, 1300,
                        1320, 1340, 1360, 1380, 1400, 1420, 1440, 1460, 1480, 1500, 1520, 1540, 1560, 1580, 1600, *range(1620, 5001, 20)) if k <= a.n_outer]
     #Make results directory
-    os.makedirs("results/toys", exist_ok=True)
+    os.makedirs(a.out_dir, exist_ok=True)
     VAL_J = 64                       # posterior draws per validation pair in the callback (see the warning in cb)
     #Value and best -- pre-seed both with the resumed run's own history so best_k/val_curve_orig stay complete
-    if resume_ckpt is not None and os.path.exists(f"results/toys/{stem}_train.json"):
-        prev = json.load(open(f"results/toys/{stem}_train.json"))
+    if resume_ckpt is not None and os.path.exists(f"{a.out_dir}/{stem}_train.json"):
+        prev = json.load(open(f"{a.out_dir}/{stem}_train.json"))
         val = {int(k): v for k, v in prev.get("val_curve_orig", prev.get("val_curve", {})).items()}
         best = (prev["best_k"], val.get(prev["best_k"], -1e30))
     else:
@@ -133,7 +135,7 @@ if __name__=='__main__':
                         "k": k, "N": N, "d": d, "hidden": a.hidden, "depth": a.depth, "arch": a.arch, "nhead": a.nhead,
                         "lr_outer": m.lr_outer,
                         "gen_state": m.gen.get_state(), "dgen_state": m.dgen.get_state(), "outer_gen_state": g.get_state()},
-                       f"results/toys/{stem}_k{k}.pt")
+                       f"{a.out_dir}/{stem}_k{k}.pt")
             if a.last_checkpoint or val[k] > best[1]:
                 best = (k, val[k])
             m.net.train()                                               # back to training for the next outer refit
@@ -149,12 +151,12 @@ if __name__=='__main__':
     model.fit(Ce_tr, callback=cb, infinite_batch=a.m_inf if infinite else None, **resume_kwargs)
     # _model.pt is written once, at the end, from the selected checkpoint's EMA net (same content as the per-improvement
     # write it replaces). The selected _k{k}.pt may come from an earlier invocation when resuming; it is still on disk.
-    zb = torch.load(f"results/toys/{stem}_k{best[0]}.pt", map_location="cpu")
+    zb = torch.load(f"{a.out_dir}/{stem}_k{best[0]}.pt", map_location="cpu")
     torch.save({"state": zb["state"], "mu": zb["mu"], "sd": zb["sd"], "k": zb["k"], "N": zb["N"], "d": zb["d"],
                 "hidden": zb["hidden"], "depth": zb["depth"], "arch": zb["arch"], "nhead": zb["nhead"]},
-               f"results/toys/{stem}_model.pt")
+               f"{a.out_dir}/{stem}_model.pt")
     # val_curve_orig: the callback's validation log-score per checkpoint ({k: mean over val_curve_orig_n_val pairs of
     # log (1/J) sum_j p(Ce_val | C_j), J = val_curve_orig_J posterior draws}), best_k, training time, M, N, d
     json.dump({"val_curve_orig": val, "val_curve_orig_n_val": a.n_val, "val_curve_orig_J": VAL_J, "best_k": best[0],
-               "fit_sec": time.time() - t0, "M": toy.M, "N": N, "d": d}, open(f"results/toys/{stem}_train.json", "w"), indent=1)
+               "fit_sec": time.time() - t0, "M": toy.M, "N": N, "d": d}, open(f"{a.out_dir}/{stem}_train.json", "w"), indent=1)
     print(f"{stem}: selected outer iteration {best[0]}  (val curve {val})  fit {time.time()-t0:.0f}s")

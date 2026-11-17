@@ -9,8 +9,8 @@ KS distance of the reference-PIT, and simulation-based-calibration (SBC) ranks o
     python toy_eval.py --toy iw_ri_d8_inf              # the production run TAGS[toy], at its best_k
     python toy_eval.py --toy iw_ri_d8_inf --k 1000     # another checkpoint of that run
 
-Writes the diagnostics results/toys/{toy}_{tag}_k{k}eval_{metrics.json,stats.npz}, and -- when k is the run's best_k
-(toy_train.py: the last checkpoint with --last_checkpoint, imposed in infinite-data mode; else the best callback validation) -- results/toys/{toy}_W1.json:
+Writes the diagnostics results/toys_M=-1/{toy}_{tag}_k{k}eval_{metrics.json,stats.npz}, and -- when k is the run's best_k
+(toy_train.py: the last checkpoint with --last_checkpoint, imposed in infinite-data mode; else the best callback validation) -- results/toys_M=-1/{toy}_W1.json:
   toy, n_test, n_ref, J, N, d, and for agg in ("mean", "median"): agg: {oracle, iw_ml, scsi}, each
   {value, detail: {stat: {w1, std}}} (w1_summary); oracle = sampling floor (W1 between the two halves of the reference
   draws), scsi = the run ("tag") at its best_k ("k"). The W1 trajectory of the run (every checkpoint of the grid) is
@@ -139,7 +139,7 @@ def w1_norm(x, ref):                           # per-observation W1 / sd(ref)
     return np.array([sps.wasserstein_distance(x[m], ref[m]) / ref[m].std() for m in range(x.shape[0])])
 
 
-# d=8 production runs: toy -> training tag (checkpoints results/toys/{toy}_{tag}_k{k}.pt)
+# d=8 production runs: toy -> training tag (checkpoints results/toys_M=-1/{toy}_{tag}_k{k}.pt)
 TAGS = {"iw_ri_d8_inf": "mlp_w512_d4", "iw_nonri_d8_inf": "mlp_w512_d4", "factor_d8_inf": "mlp_w512_d4",
         "hetero_d8_inf": "mlp_w512_d4", "diag_d8_inf": "mlp_w512_d4", "iso_diag_d8_inf": "mlp_w1024_d4",
         "ar1_d8_inf": "resnet_w1024_d4"}
@@ -200,21 +200,21 @@ if __name__ == "__main__":
                                                 "TAGS[toy]). The reference cache {toy}_ref.pt is keyed by the toy only.")
     ap.add_argument("--k", type=int, default=None, help="checkpoint to evaluate (default: the run's best_k)")
     ap.add_argument("--n_steps", type=int, default=0, help="SDE steps for SC-SI sampling (0 = the model's n_sde_steps, i.e. 64)")
-    ap.add_argument("--ref_cache", default="", help="reference cache path (default results/toys/{toy.name}_ref.pt); "
+    ap.add_argument("--ref_cache", default="", help="reference cache path (default results/toys_M=-1/{toy.name}_ref.pt); "
                                                     "the cache ignores --n_ref, so a different n_ref needs its own file")
     a = ap.parse_args()
     torch.set_num_threads(a.threads)
     toy = make_pd_toy(a.toy, a.p, a.N) if a.toy == "iso_diag" else make_toy(a.toy)
     tag = a.tag or TAGS[toy.name]
     run = f"{toy.name}_{tag}"
-    best_k = json.load(open(f"results/toys/{run}_train.json"))["best_k"]
+    best_k = json.load(open(f"results/toys_M=-1/{run}_train.json"))["best_k"]
     k_eval = best_k if a.k is None else a.k
     stem = f"{run}_k{k_eval}eval"                                    # diagnostics files
-    os.makedirs("results/toys", exist_ok=True)
+    os.makedirs("results/toys_M=-1", exist_ok=True)
     C_true, Ce = make_testset(toy, a.n_test)
 
     #Calculate statistics from true posterior
-    ref_C, ref_diag = get_reference(toy, Ce, a.n_ref, a.ref_cache or f"results/toys/{toy.name}_ref.pt")
+    ref_C, ref_diag = get_reference(toy, Ce, a.n_ref, a.ref_cache or f"results/toys_M=-1/{toy.name}_ref.pt")
     print(f"reference ({'exact IW' if toy.exact else 'HMC'}): {ref_C.shape}  diag={ {k: v for k, v in ref_diag.items() if k != 'rhat'} }")
 
     if "rhat" in ref_diag:
@@ -223,7 +223,7 @@ if __name__ == "__main__":
         raise SystemExit
     # ---- learners ---- #
     #Take the best model
-    model, kbest = load_scsi(toy, f"results/toys/{run}_k{k_eval}.pt", a.threads)
+    model, kbest = load_scsi(toy, f"results/toys_M=-1/{run}_k{k_eval}.pt", a.threads)
     g = torch.Generator().manual_seed(99)
     # SC-SI draws: noise from a device generator (no per-step host RNG + copy) and TF32 matmuls in the drift net
     # (~4x faster on an A100 for w1024; W1 unchanged to 4 decimals). Eval only -- training keeps full fp32.
@@ -237,7 +237,7 @@ if __name__ == "__main__":
     Ce_tr = wishart_channel(toy.sample_prior(M_fit, gg), toy.N, gg)
     
     #Fit an IW surrogate prior
-    iw = fit_iw_cached(Ce_tr, toy.N, f"results/toys/{toy.name}_iwfit_ref.pt")
+    iw = fit_iw_cached(Ce_tr, toy.N, f"results/toys_M=-1/{toy.name}_iwfit_ref.pt")
     #Sample posterior
     Cs_iw = iw.sample_posterior(Ce, a.J, gen=g)
     print(f"SC-SI checkpoint k={kbest};  IW-ML fit nu0={iw.nu0:.2f}")
@@ -272,14 +272,14 @@ if __name__ == "__main__":
     
     #Dump evaluation metric file
     json.dump({"toy": toy.name, "d": toy.d, "N": toy.N, "M": toy.M, "kbest": kbest, "n_test": a.n_test, "n_ref": a.n_ref, "J": a.J,
-               "ref_diag": ref_diag, "metrics": metrics}, open(f"results/toys/{stem}_metrics.json", "w"), indent=1, default=float)
+               "ref_diag": ref_diag, "metrics": metrics}, open(f"results/toys_M=-1/{stem}_metrics.json", "w"), indent=1, default=float)
     
     #
     arrs = {f"{nm}__{s}": S[nm][s].astype(np.float32) for nm in S for s in STATS}
     arrs.update({f"truth__{s}": T[s] for s in STATS}); arrs.update({f"scm__{s}": SCM[s] for s in STATS})
     
     #Save summary stats
-    np.savez(f"results/toys/{stem}_stats.npz", **arrs)
+    np.savez(f"results/toys_M=-1/{stem}_stats.npz", **arrs)
 
     # {toy}_W1.json: oracle (sampling floor), IW-ML and the run's best_k checkpoint
     if k_eval == best_k:
@@ -289,7 +289,7 @@ if __name__ == "__main__":
         iw_s, si_s = w1_summary(S["iwfit"], ref), w1_summary(S["scsi"], ref)
         for agg in AGGS:
             W[agg] = {"oracle": fl[agg], "iw_ml": iw_s[agg], "scsi": {"tag": tag, "k": k_eval, **si_s[agg]}}
-        json.dump(W, open(f"results/toys/{toy.name}_W1.json", "w"), indent=1)
+        json.dump(W, open(f"results/toys_M=-1/{toy.name}_W1.json", "w"), indent=1)
         print(f"{toy.name}_W1.json: " + "  ".join(f"{agg}: oracle {W[agg]['oracle']['value']:.4f} iw_ml "
               f"{W[agg]['iw_ml']['value']:.4f} scsi(k={k_eval}) {W[agg]['scsi']['value']:.4f}" for agg in AGGS))
     print(f"{'stat':12s} {'floor':>6s} | SC-SI: W1 W1med sd-ratio bias  PITks | IW-fit: W1 W1med sd-ratio bias PITks | SCM|z|  | SBC-KS ref/scsi/iw")

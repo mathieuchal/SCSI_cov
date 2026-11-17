@@ -1,4 +1,4 @@
-"""W1 tables of the d=8 toys, from results/toys/{toy}_W1.json (toy_eval.py): SC-SI (the production run at its best_k)
+"""W1 tables of the d=8 toys, from results/toys_M=-1/{toy}_W1.json (toy_eval.py): SC-SI (the production run at its best_k)
 and IW-ML.
 
 W1 / ref-sd per statistic, aggregated over the 128 test tasks by the mean (table "mean") or the median (table "median");
@@ -9,7 +9,7 @@ there). Bold: the better of SC-SI / IW-ML in each column, at the printed precisi
 """
 import json, math
 
-R = "results/toys"
+R = "results/toys_M=-1"
 STATS = ["logdet", "logcond", "top_share", "ldv_top", "ldv_bot", "corr01"]
 HEAD = ["log det", r"log $\kappa$", "top share", "dv top", "dv bot", r"$C_{01}$"]
 ROWS = [("IW, RI", "iw_ri_d8_inf"), ("IW, non-RI", "iw_nonri_d8_inf"), ("Factor", "factor_d8_inf"),

@@ -10,13 +10,13 @@
 # Run on 2026-11-17 (00:36-03:32 UTC); steps 3-5 were then finished with the current scripts below.
 #
 #   bash retrain_iso_d8.sh        (from log-space/toys; ~3h GPU; master log ../logs/retrain_iso_d8.log)
-# Steps: 0 archive old outputs -> results/toys/archive_iso_oldrng/   1 train k0-700 (cosine 5e-4 -> 1e-5)
+# Steps: 0 archive old outputs -> results/toys_M=-1/archive_iso_oldrng/   1 train k0-700 (cosine 5e-4 -> 1e-5)
 #        2 resume k700-1000 (constant 5e-5)   3 W1: trajectory (toy_W1_mean.py) and best_k (toy_eval.py)
 #        4 log-score J=2e6 (toy_oracle_log_score.py)   5 tables and figures
 set -euo pipefail
 cd "$(dirname "$0")"
 source ../.venv/bin/activate
-T=iso_diag_d8_inf; TAG=mlp_w1024_d4; STEM=${T}_${TAG}; R=results/toys; L=../logs; A=$R/archive_iso_oldrng
+T=iso_diag_d8_inf; TAG=mlp_w1024_d4; STEM=${T}_${TAG}; R=results/toys_M=-1; L=../logs; A=$R/archive_iso_oldrng
 exec > >(tee -a $L/retrain_iso_d8.log) 2>&1
 echo "=== start $(date -u)"
 

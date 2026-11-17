@@ -2,7 +2,7 @@
 *.pt
 *.npz
 # per-checkpoint diagnostics of toy_eval.py
-toys/results/toys/*_k*eval_*
+toys/results/*/*_k*eval_*
 # run logs (the folder itself is kept)
 logs/*
 !logs/.gitkeep

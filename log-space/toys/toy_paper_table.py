@@ -2,9 +2,9 @@
 (the production run at its best_k) and IW-ML.
 
 Inputs (no computation, only reads):
-  results/toys/{toy}_logscore.json   (toy_oracle_log_score.py): per-pair log-scores of the oracle, IW-ML and SC-SI at
+  results/toys_M=-1/{toy}_logscore.json   (toy_oracle_log_score.py): per-pair log-scores of the oracle, IW-ML and SC-SI at
                                      best_k (J=2e6, 10 validation pairs)
-  results/toys/{toy}_W1.json         (toy_eval.py): W1 / oracle sd per statistic, mean or median over the 128 test tasks
+  results/toys_M=-1/{toy}_W1.json         (toy_eval.py): W1 / oracle sd per statistic, mean or median over the 128 test tasks
 
 Columns: log-score gap = oracle - method (nats per task, paired over the validation pairs; lower is better, negative =
 above the oracle), then the six W1 statistics and their average ("avg"; corr01 is "--" for the diagonal toy, whose
@@ -19,7 +19,7 @@ column, at the printed precision.
 import argparse, json, math
 from toy_logscore_w1_curve import IW_EXACT_EXPECTED, paired
 
-R = "results/toys"
+R = "results/toys_M=-1"
 STATS = ["logdet", "logcond", "top_share", "ldv_top", "ldv_bot", "corr01"]
 HEAD = ["log-score", r"$\log\det C$", r"$\log\kappa$", "top share", r"$\mathrm{dv}_{\mathrm{top}}$",
         r"$\mathrm{dv}_{\mathrm{bot}}$", r"$C_{01}$", "avg"]

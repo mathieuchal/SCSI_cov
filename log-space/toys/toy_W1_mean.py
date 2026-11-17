@@ -7,7 +7,7 @@ average over the statistics (toy_eval.w1_summary). Same test set, reference, see
 toy_eval.py, which evaluates a single checkpoint (the run's best_k) together with the oracle floor and IW-ML and
 writes {toy}_W1.json.
 
-Writes, in the run's results/toys/{stem}_train.json:
+Writes, in the run's results/toys_M=-1/{stem}_train.json:
   "w1_curve_mean": {k: value}, "w1_curve_median": {k: value}, "w1_curve_n_test", "w1_curve_n_ref", "w1_curve_J"
 Re-running resumes: checkpoints already in the curves are skipped.
 
@@ -19,7 +19,7 @@ import torch
 from toy_eval import make_testset, stats_np, get_reference, load_scsi, w1_summary, AGGS, TAGS, GRID
 from toys import make_toy
 
-R = "results/toys"
+R = "results/toys_M=-1"
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()

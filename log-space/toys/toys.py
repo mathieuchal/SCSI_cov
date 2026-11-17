@@ -840,6 +840,15 @@ TOYS = {
                                                     # d_min as p grows) eases learning of the bottom-eigenvector directional variance
     "diag_d8_inf":     lambda: DiagToy("diag_d8_inf", 8, 40, -1),
     "diag_d16_inf":    lambda: DiagToy("diag_d16_inf", 16, 80, -1),
+    # finite-data counterparts of the d=8 production toys: same priors and N=40, one fixed training ensemble of M=5000 Ce
+    "iw_ri_d8_M5000":    lambda: IWToy("iw_ri_d8_M5000", 8, 40, 5000, "ri", 16.0),
+    "iw_nonri_d8_M5000": lambda: IWToy("iw_nonri_d8_M5000", 8, 40, 5000, "nonri", 16.0),
+    "factor_d8_M5000":   lambda: FactorToy("factor_d8_M5000", 8, 40, 5000),
+    "iso_diag_d8_M5000": lambda: IsoDiagToy("iso_diag_d8_M5000", 8, 40, 5000),
+    "ar1_d8_M5000":      lambda: AR1Toy("ar1_d8_M5000", 8, 40, 5000),
+    "hetero_d8_M5000":   lambda: HeteroskedasticToy("hetero_d8_M5000", 8, 40, 5000, r=3,
+                                                      scale_min=0.4, scale_max=0.8, d_min=0.3, d_max=1.0),
+    "diag_d8_M5000":     lambda: DiagToy("diag_d8_M5000", 8, 40, 5000),
 }
 
 

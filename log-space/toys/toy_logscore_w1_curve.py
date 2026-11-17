@@ -3,10 +3,10 @@ EM outer iteration k -- one column per toy, two separate y-axes (no dual axis).
 
 Inputs
   log-score (toy_oracle_log_score.py, J=2e6, 10 validation pairs): SC-SI trajectory = "val_curve" of the run's
-             results/toys/{toy}_{TAGS[toy]}_train.json; oracle and IW-ML from results/toys/{toy}_logscore.json
+             results/toys_M=-1/{toy}_{TAGS[toy]}_train.json; oracle and IW-ML from results/toys_M=-1/{toy}_logscore.json
              (the oracle is the closed form for the IW toys, HMC/grid Monte-Carlo at the same J otherwise)
   W1 (default median over the test tasks, --mean the mean): SC-SI trajectory = "w1_curve_median" / "w1_curve_mean"
-             of the run's _train.json (toy_W1_mean.py); IW-ML from results/toys/{toy}_W1.json (toy_eval.py).
+             of the run's _train.json (toy_W1_mean.py); IW-ML from results/toys_M=-1/{toy}_W1.json (toy_eval.py).
 
     python toy_logscore_w1_curve.py               -> figs/logscore_w1_vs_k_d8.png
     python toy_logscore_w1_curve.py --no_hetero   -> figs/logscore_w1_vs_k_d8_nohetero.png
@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from plotstyle import *
 
 setup()
-R = "results/toys"
+R = "results/toys_M=-1"
 TOYS = [("iw_ri_d8_inf", "IW, RI -- MLP-4 w512"), ("iw_nonri_d8_inf", "IW, non-RI -- MLP-4 w512"),
         ("factor_d8_inf", "Factor -- MLP-4 w512"), ("iso_diag_d8_inf", "Iso-diagonal -- MLP-4 w1024"),
         ("ar1_d8_inf", "AR(1) -- ResNet-4 w1024"), ("diag_d8_inf", "Diagonal -- MLP-4 w512"),

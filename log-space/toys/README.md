@@ -8,13 +8,13 @@ python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-All commands below are run from `log-space/toys` inside this venv (`source ../.venv/bin/activate`). Results go to `results/toys/`, figures and tables to `figs/`, and logs to `../logs/`.
+All commands below are run from `log-space/toys` inside this venv (`source ../.venv/bin/activate`). Results go to `results/toys_M=-1/`, figures and tables to `figs/`, and logs to `../logs/`.
 
 **What is versioned.** The repository holds the code and the result files of the seven production runs: `{STEM}_train.json`, `{toy}_logscore.json` and `{toy}_W1.json`. They are enough to rebuild the figure and the tables (step 4) without a GPU. The trained models, checkpoints, reference posteriors and IW-ML fits (`*.pt`) are not published. Steps 1–3 regenerate them, and the reference posteriors `{toy}_ref.pt` and the IW-ML fits `{toy}_iwfit_ref.pt` are rebuilt automatically when missing. On an already-versioned run, `toy_oracle_log_score.py` and `toy_W1_mean.py` skip the values already in its JSON files (delete them first to recompute from scratch); `toy_eval.py` always recomputes.
 
 ## Plotting the paper results without retraining
 
-The result files of the seven production runs are included in `results/toys/`: `{STEM}_train.json` (log-score and W1 trajectories along training), `{toy}_logscore.json` (log-scores at the last checkpoint) and `{toy}_W1.json` (W1 at the last checkpoint). The figure and the tables are built from these files alone, so they can be reproduced right after cloning, without training a model and without a GPU:
+The result files of the seven production runs are included in `results/toys_M=-1/`: `{STEM}_train.json` (log-score and W1 trajectories along training), `{toy}_logscore.json` (log-scores at the last checkpoint) and `{toy}_W1.json` (W1 at the last checkpoint). The figure and the tables are built from these files alone, so they can be reproduced right after cloning, without training a model and without a GPU:
 
 ```bash
 python toy_logscore_w1_curve.py     # figure: figs/logscore_w1_vs_k_d8.png (also --mean, --no_hetero)
@@ -39,10 +39,10 @@ The scripts look up the tag of each toy in the `TAGS` dict of `toy_eval.py` and 
 ## 1. Train: `toy_train.py`
 
 ```bash
-T=hetero_d8_inf; TAG=mlp_w512_d4
+T=factor_d8_inf; TAG=mlp_w512_d4
 python toy_train.py --toy $T --tag $TAG > ../logs/${T}_${TAG}_train.log 2>&1        # stage 1: k=0..700, cosine outer lr
 python toy_train.py --toy $T --tag $TAG --n_outer 1000 \
-       --resume results/toys/${T}_${TAG}_k700.pt > ../logs/${T}_${TAG}_train_k700-1000.log 2>&1   # stage 2: constant lr 5e-5
+       --resume results/toys_M=-1/${T}_${TAG}_k700.pt > ../logs/${T}_${TAG}_train_k700-1000.log 2>&1   # stage 2: constant lr 5e-5
 ```
 
 The AR(1) toy has a third stage: `--n_outer 2000 --resume ..._k1000.pt`. On `--resume`, the architecture is read from the checkpoint.
@@ -57,7 +57,7 @@ Outputs (`STEM={toy}_{tag}`):
 | `{STEM}_model.pt` | the `best_k` checkpoint |
 | `{STEM}_train.json` | `val_curve_orig` (callback validation: 300 pairs, J=64), `best_k`, `fit_sec`, `M`, `N`, `d` |
 
-`best_k` is the checkpoint the run reports. In infinite-data mode (`toy.M == -1`, every toy here), `best_k` is the last checkpoint (k=1000, k=2000 for AR(1)): there is no overfitting, and the J=64 callback score is too noisy to select on. This is imposed whatever the command line says. With finite data, `best_k` is the last checkpoint with `--last_checkpoint`, and the maximum of the callback validation curve otherwise.
+`best_k` is the checkpoint the run reports. In infinite-data mode (`toy.M == -1`, the seven production runs), `best_k` is the last checkpoint (k=1000, k=2000 for AR(1)): there is no overfitting, and the J=64 callback score is too noisy to select on. This is imposed whatever the command line says. With finite data, `best_k` is the last checkpoint with `--last_checkpoint`, and the maximum of the callback validation curve otherwise.
 
 ## 2. Log-score: `toy_oracle_log_score.py`
 
@@ -120,6 +120,27 @@ It writes two tables: W1 median and W1 mean. For the IW toys, the IW-ML gap is t
 
 Nothing is recomputed in step 4. Steps 1–3 produce every number in the figure and the tables.
 
+## Finite data: the M=5000 runs
+
+`toys.py` also defines `{toy}_d8_M5000`, the finite-data counterparts of the production toys. They share the same prior and N=40, but train on one fixed ensemble of M=5000 noisy Ce instead of a fresh ensemble at every E-step. They use the same architectures and the same training protocol, and write to a separate folder with `--out_dir`:
+
+```bash
+bash train_M5000.sh     # -> results/toys_M=5000/, logs in ../logs/M=5000/ (training only)
+```
+
+The script currently trains `iw_nonri`, `factor` and `diag`, one run at a time, in about 1 h each on one GPU. With finite data, `--last_checkpoint` is not imposed. The evaluation of these runs (same tables as M=inf) is still to be set up.
+
+## Effect of the SDE time step: `toy_dt_study.py`
+
+The sampler integrates the Föllmer SDE by Euler–Maruyama on t ∈ [0, 1] with Δt = 1/`n_steps`. Every production result uses 64 steps (`SCSIConfig.n_sde_steps`). `toy_dt_study.py` re-evaluates a run at its `best_k` with other step counts, at evaluation only. It reuses the production protocols: the J=2·10⁶ log-score of step 2 and the W1 of step 3.
+
+```bash
+python toy_dt_study.py --toys iw_nonri_d8_inf,factor_d8_inf,diag_d8_inf --n_steps 32,128
+# -> results/toys_M=-1/{toy}_dt.json and figs/toy_dt_table.txt
+```
+
+With `--n_steps 64`, it reproduces the production values exactly. The table's Δt = 1/64 rows are therefore read from `{toy}_logscore.json` and `{toy}_W1.json`.
+
 ## Full pipeline for one toy
 
-`retrain_iso_d8.sh` runs steps 1 to 4 for the iso-diagonal toy, about 3 h on one GPU. The previous outputs, if any, are first moved to `results/toys/archive_iso_oldrng/`. Use it as a template for the other toys.
+`retrain_iso_d8.sh` runs steps 1 to 4 for the iso-diagonal toy, about 3 h on one GPU. The previous outputs, if any, are first moved to `results/toys_M=-1/archive_iso_oldrng/`. Use it as a template for the other toys.
