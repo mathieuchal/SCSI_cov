@@ -67,6 +67,9 @@ if __name__=='__main__':
                                                    "training from, instead of starting from the sampleable-prior init")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu", help="Device on which to run calculations")
     ap.add_argument("--verbose", type=str, default='False', help="print logging messages")
+    ap.add_argument("--results_dir", default="results/toys", help="root results directory (per-encoding chol/"
+                     "spectral subdirs and {stem}_* outputs are written under it) -- override to keep a separate "
+                     "campaign's files apart, e.g. results/toys_M=5000 for a finite-data run")
 
     a = ap.parse_args()
     torch.set_num_threads(a.threads)
@@ -92,7 +95,7 @@ if __name__=='__main__':
             g.set_state(resume_ckpt["outer_gen_state"])                     # continue the SAME training-data stream, not a fresh replay
         print(f"resuming from {a.resume}: k={resume_ckpt['k']}  hidden={a.hidden}  depth={a.depth}", flush=True)
 
-    rd = run_dir(a.encoding)   # results/toys/chol or results/toys/spectral -- a.encoding is final by now
+    rd = run_dir(a.encoding, results_dir=a.results_dir)   # {results_dir}/chol or {results_dir}/spectral -- a.encoding is final by now
 
     cfg = SCSIConfig(N=N, d=d, n_outer=a.n_outer, steps_first=a.steps_first, steps_outer=a.steps_outer, seed=a.seed,
              init="raw", log_prior_inflate=1.5, threads=a.threads, n_recon=a.n_recon, hidden=a.hidden, depth=a.depth,
@@ -121,7 +124,7 @@ if __name__=='__main__':
                        320, 340, 360, 380, 400, 420, 440, 460, 480, 500, 520, 540, 560, 580, 600, 620, 640, 660, 680, 700,
                        720, 740, 760, 780, 800, 850, 900, 950, 1000) if k <= a.n_outer]
     #Make results directory
-    os.makedirs("results/toys", exist_ok=True)
+    os.makedirs(a.results_dir, exist_ok=True)
     #Value and best -- pre-seed both with the resumed run's own history so best_k/val_curve stay complete
     if resume_ckpt is not None and os.path.exists(f"{rd}/{stem}_train.json"):
         prev = json.load(open(f"{rd}/{stem}_train.json"))

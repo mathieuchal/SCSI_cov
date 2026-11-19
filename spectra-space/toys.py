@@ -950,6 +950,8 @@ TOYS = {
     #"iw_ri_d4":    lambda: IWToy("iw_ri_d4", 4, 8, 5000, "ri", 12.0),
     #"factor_d8":   lambda: FactorToy("factor_d8", 8, 28, 3000),  # old finite-data config
     "iw_ri_d8_inf":    lambda: IWToy("iw_ri_d8_inf", 8, 40, -1, "ri", 16.0),
+    "iw_ri_d8":        lambda: IWToy("iw_ri_d8", 8, 40, 5000, "ri", 16.0),  # finite-data (M=5000) counterpart of
+                                                                              # iw_ri_d8_inf, same d/N/ri_mode/kappa0
     "iw_ri_d16_inf":   lambda: IWToy("iw_ri_d16_inf", 16, 80, -1, "ri", 32.0),  # scaling test: p=136 coord-space (>>32 LAPACK-bug threshold)
     "iw_ri_d30_inf":   lambda: IWToy("iw_ri_d30_inf", 30, 150, -1, "ri", 60.0),  # same N/d=5 ratio and kappa0=2d convention as iw_ri_d16_inf
     "iw_nonri_d8_inf": lambda: IWToy("iw_nonri_d8_inf", 8, 40, -1, "nonri", 16.0),
@@ -958,6 +960,8 @@ TOYS = {
     "factor_d8_inf":   lambda: FactorToy("factor_d8_inf", 8, 40, -1),
     "factor_d16_inf":  lambda: FactorToy("factor_d16_inf", 16, 80, -1),  # same N/d=5 ratio as iw_ri/hetero/ar1/iso_diag_d16_inf
     "iso_diag_d8_inf": lambda: IsoDiagToy("iso_diag_d8_inf", 8, 40, -1),
+    "iso_diag_d8":     lambda: IsoDiagToy("iso_diag_d8", 8, 40, 5000),  # finite-data (M=5000) counterpart of
+                                                                          # iso_diag_d8_inf, same d/N
     "iso_diag_d16_inf": lambda: IsoDiagToy("iso_diag_d16_inf", 16, 80, -1),  # same N/d=5 ratio as iw_ri/hetero/ar1_d16_inf
     "ar1_d8_inf":      lambda: AR1Toy("ar1_d8_inf", 8, 40, -1),
     "ar1_d16_inf":     lambda: AR1Toy("ar1_d16_inf", 16, 80, -1, rho_max=0.9),  # same d16/N80 convention as
