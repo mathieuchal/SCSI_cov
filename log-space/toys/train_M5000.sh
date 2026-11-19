@@ -1,5 +1,5 @@
 #!/bin/bash
-# Finite-data (M=5000) counterparts of three of the d=8 production runs (iw_nonri, factor, diag): same toys (prior, N=40),
+# Finite-data (M=5000) counterparts of six of the d=8 production runs (all but AR(1)): same toys (prior, N=40),
 # same architectures, one fixed training ensemble of M=5000 noisy Ce. One training stage only: k=0..700 with the cosine outer
 # lr (no constant-lr extension to k=1000). Training only (no evaluation). Outputs in results/toys_M=5000/, logs in
 # ../logs/M=5000/. One run at a time.
@@ -24,4 +24,7 @@ echo "=== start $(date -u)"
 run iw_nonri_d8_M5000 mlp_w512_d4
 run factor_d8_M5000 mlp_w512_d4
 run diag_d8_M5000 mlp_w512_d4
+run iw_ri_d8_M5000 mlp_w512_d4
+run iso_diag_d8_M5000 mlp_w1024_d4 --hidden 1024
+run hetero_d8_M5000 mlp_w512_d4
 echo "=== all done $(date -u)"

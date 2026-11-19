@@ -68,7 +68,7 @@ if __name__ == "__main__":
             if role == "report":
                 path = f"{R}/{name}_logscore.json"
                 doc = json.load(open(path)) if os.path.exists(path) else {}
-                doc = {"toy": name, "n_val": a.n_val, "J": a.J, "N": toy.N, "d": toy.d, **doc}
+                doc = doc or {"toy": name, "N": toy.N, "d": toy.d}             # new file: J, n_val, val_seed set by check_key
                 check_key(doc, key, "", path); ref = doc
             else:
                 path = f"{R}/{stem}_train.json"

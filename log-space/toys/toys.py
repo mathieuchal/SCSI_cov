@@ -4,9 +4,9 @@
   FactorToy : factor + idiosyncratic covariance  C = B B^T + diag(psi)  (K = 2 factors: a positive-loading
               "market" factor and a mixed-sign second factor).  No conjugacy: the reference posterior is a
               batched Hamiltonian Monte Carlo sampler on (B, log psi), validated by simulation-based calibration.
-  WishartToy, SpikedModelToy, IsoDiagToy, AR1Toy, HeteroskedasticToy : our own (non-conjugate) priors,
+  WishartToy, IsoDiagToy, AR1Toy, HeteroskedasticToy : our own (non-conjugate) priors,
               each with its sampling law defined directly in its own sample_prior (previously separate
-              functions in a sample.py this file no longer depends on). None of these five is conjugate to
+              functions in a sample.py this file no longer depends on). None of these four is conjugate to
               the Gaussian/Wishart observation channel, so none has a closed-form posterior -- p(C | Ce) is
               targeted by MCMC in all of them except AR1Toy.
 
@@ -15,12 +15,12 @@
               the (unnormalized) Wishart-channel log-posterior over rho, normalize, sample by inverse-CDF.
               Exact up to the grid resolution, no warmup/acceptance-rate/R-hat concerns.
 
-              Design note -- the U (Haar-orthogonal) component: SpikedModelToy and IsoDiagToy both draw
+              Design note -- the U (Haar-orthogonal) component: IsoDiagToy draws
               an orthonormal U (p x r, U^T U = I_r), i.e. a point on the Stiefel manifold, not a Euclidean
               vector. Plain (Euclidean) HMC on an unconstrained embedding of U has no simple, correct
               Jacobian (the embedding is generally not a bijection onto the manifold), so it would silently
               target the WRONG posterior. Instead we use a Gibbs-style hybrid, alternating:
-                - proper leapfrog HMC on the magnitude parameters (D's diagonal, spikes), in an unconstrained
+                - proper leapfrog HMC on the magnitude parameters (the spikes), in an unconstrained
                   (logit) reparametrization of their truncated-normal priors, and
                 - a Givens-rotation Metropolis step on U (U' = G(i,j,theta) @ U): these proposals stay on the
                   Stiefel manifold by construction and are symmetric with respect to the Haar measure there
@@ -201,7 +201,7 @@ class FactorToy(Toy):
 
 
 # --------------------------------------------------------------------------- #
-# shared helpers for the WishartToy / SpikedModelToy / IsoDiagToy / HeteroskedasticToy sampling + HMC below
+# shared helpers for the WishartToy / IsoDiagToy / HeteroskedasticToy sampling + HMC below
 # --------------------------------------------------------------------------- #
 
 def cholesky_qr(G: torch.Tensor, eps: float = 1e-7) -> torch.Tensor:
@@ -266,7 +266,7 @@ def wishart_nll(C: torch.Tensor, N: int, Ce: torch.Tensor) -> torch.Tensor:
     # real factorization -- keeps every computed value finite (no NaN/inf leaking into other
     # elements' gradients through autograd) -- then return +inf for it: callers' HMC loops already
     # treat a non-finite potential as an automatic Metropolis reject (same fix as FactorToy.potential,
-    # generalized here since WishartToy/SpikedModelToy/IsoDiagToy/HeteroskedasticToy all share this).
+    # generalized here since WishartToy/IsoDiagToy/HeteroskedasticToy all share this).
     d = C.shape[-1]
     _, info = torch.linalg.cholesky_ex(C, upper=True)
     bad = info != 0
@@ -419,128 +419,6 @@ class WishartToy:
 
 
 # --------------------------------------------------------------------------- #
-# SpikedModelToy: C = D + U diag(spikes) U^T -- hybrid HMC(D,spikes) + Givens(U).
-# --------------------------------------------------------------------------- #
-
-class SpikedModelToy:
-    exact = False
-
-    def __init__(self, name, p, N, M, r=5, spike_mean=3.0, spike_std=1.0, D_mean=1.5, D_std=1.0):
-        if spike_mean < spike_std or D_mean <= D_std:
-            raise ValueError("need spike_mean >= spike_std and D_mean > D_std (same guard as sample_spiked)")
-        self.name, self.p, self.N, self.M, self.r = name, p, N, M, r
-        self.d = p                                                    # alias: toy_train.py and the evaluation scripts expect `.d`
-        self.spike_mean, self.spike_std = spike_mean, spike_std
-        self.D_mean, self.D_std = D_mean, D_std
-        self.spike_a, self.spike_b = spike_mean - spike_std, spike_mean + spike_std
-        self.D_a, self.D_b = D_mean - D_std, D_mean + D_std
-
-    def sample_prior(self, n, gen=None):
-        """M = D + U diag(spikes) U^T: U (p,r) Haar-orthonormal, spikes/D_diag genuinely truncated normal
-        (inverse-CDF via trunc_normal, no boundary point mass)."""
-        U = cholesky_qr(torch.randn(n, self.p, self.r, dtype=DT, generator=gen))
-        spikes = trunc_normal((n, self.r), self.spike_mean, self.spike_std, self.spike_a, self.spike_b, gen)
-        D_diag = trunc_normal((n, self.p), self.D_mean, self.D_std, self.D_a, self.D_b, gen)
-        return self.C_from(U, spikes, D_diag)
-
-    def C_from(self, U, spikes, D_diag):
-        return torch.diag_embed(D_diag) + (U * spikes.unsqueeze(-2)) @ U.transpose(-1, -2)
-
-    def sample_params(self, n, gen=None, device=None):
-        G = torch.randn(n, self.p, self.r, dtype=DT, generator=gen)
-        U = cholesky_qr(G)
-        spikes = trunc_normal((n, self.r), self.spike_mean, self.spike_std, self.spike_a, self.spike_b, gen)
-        D_diag = trunc_normal((n, self.p), self.D_mean, self.D_std, self.D_a, self.D_b, gen)
-        v_spikes = unconstrain_bounded(spikes, self.spike_a, self.spike_b)
-        v_D = unconstrain_bounded(D_diag, self.D_a, self.D_b)
-        if device is not None:
-            U, v_spikes, v_D = U.to(device), v_spikes.to(device), v_D.to(device)
-        return U, v_spikes, v_D
-
-    def _mag_potential(self, v_mag, U, Ce):
-        v_spikes, v_D = v_mag[..., :self.r], v_mag[..., self.r:]
-        spikes, _ = constrain_bounded(v_spikes, self.spike_a, self.spike_b)
-        D_diag, _ = constrain_bounded(v_D, self.D_a, self.D_b)
-        C = self.C_from(U, spikes, D_diag)
-        nll = wishart_nll(C, self.N, Ce)
-        lp = (trunc_normal_logprob(v_spikes, self.spike_mean, self.spike_std, self.spike_a, self.spike_b).sum(-1)
-              + trunc_normal_logprob(v_D, self.D_mean, self.D_std, self.D_a, self.D_b).sum(-1))
-        return nll - lp
-
-    def _mag_U_and_grad(self, v_mag, U, Ce):
-        with torch.enable_grad():
-            v_mag = v_mag.detach().requires_grad_(True)
-            pot = self._mag_potential(v_mag, U, Ce)
-            g, = torch.autograd.grad(pot.sum(), v_mag)
-        return pot.detach(), g
-
-    def hmc(self, Ce, n_chains=8, n_keep=256, thin=4, warmup=1500, L=10, hmc_target=0.75,
-            givens_per_sweep=6, givens_step0=0.3, gen=None, return_diag=False):
-        Ce = Ce.to(DT)
-        device = Ce.device
-        M = Ce.shape[0]
-        Cer = Ce.repeat_interleave(n_chains, 0)
-        n = M * n_chains
-        U, v_spikes, v_D = self.sample_params(n, gen, device=device)
-        v_mag = torch.cat([v_spikes, v_D], dim=-1)
-        eps = torch.full((n,), 0.05, dtype=DT, device=device)
-        g_step = torch.full((n,), givens_step0, dtype=DT, device=device)
-        pot, g = self._mag_U_and_grad(v_mag, U, Cer)
-        keep, acc_hist_hmc, acc_hist_g = [], [], []
-        for it in range(warmup + n_keep * thin):
-            # --- Givens sweep on U, magnitudes held fixed ---
-            def energy_fn(Uprop):
-                spikes, _ = constrain_bounded(v_mag[..., :self.r], self.spike_a, self.spike_b)
-                D_diag, _ = constrain_bounded(v_mag[..., self.r:], self.D_a, self.D_b)
-                return wishart_nll(self.C_from(Uprop, spikes, D_diag), self.N, Cer)
-            for _ in range(givens_per_sweep):
-                U, acc_g = givens_step(U, energy_fn, float(g_step.mean()), gen=gen)
-                acc_hist_g.append(float(acc_g.double().mean()))
-            pot, g = self._mag_U_and_grad(v_mag, U, Cer)   # recompute after U moved
-
-            # --- one leapfrog HMC trajectory on the magnitudes, U held fixed ---
-            p_mom = torch.randn(v_mag.shape, dtype=DT, generator=gen).to(device)
-            H0 = pot + 0.5 * (p_mom ** 2).sum(-1)
-            e = eps[:, None] * (1.0 + 0.1 * (2 * torch.rand(n, 1, dtype=DT, generator=gen).to(device) - 1))
-            vv, pp, gg = v_mag, p_mom - 0.5 * e * g, g
-            for l in range(L):
-                vv = vv + e * pp
-                pot_v, gg = self._mag_U_and_grad(vv, U, Cer)
-                if l < L - 1:
-                    pp = pp - e * gg
-            pp = pp - 0.5 * e * gg
-            H1 = pot_v + 0.5 * (pp ** 2).sum(-1)
-            logacc = torch.clamp(H0 - H1, max=0.0)
-            logacc = torch.where(torch.isfinite(logacc), logacc, torch.full_like(logacc, -1e30))
-            accept = torch.log(torch.rand(n, dtype=DT, generator=gen).to(device)) < logacc
-            v_mag = torch.where(accept[:, None], vv, v_mag)
-            pot = torch.where(accept, pot_v, pot)
-            g = torch.where(accept[:, None], gg, g)
-            pacc = torch.exp(torch.clamp(logacc, max=0.0))
-            acc_hist_hmc.append(float(accept.double().mean()))
-            if it < warmup:
-                eps = (eps * torch.exp(0.05 * (pacc - hmc_target))).clamp(1e-4, 0.5)
-            else:
-                if (it - warmup) % thin == thin - 1:
-                    spikes, _ = constrain_bounded(v_mag[..., :self.r], self.spike_a, self.spike_b)
-                    D_diag, _ = constrain_bounded(v_mag[..., self.r:], self.D_a, self.D_b)
-                    keep.append(self.C_from(U, spikes, D_diag))
-        Cs = torch.stack(keep, 1).reshape(M, n_chains * n_keep, self.p, self.p)
-        if return_diag:
-            return Cs, dict(acc_hmc=float(sum(acc_hist_hmc) / len(acc_hist_hmc)),
-                             acc_givens=float(sum(acc_hist_g) / len(acc_hist_g)),
-                             eps_median=float(eps.median()), n_chains=n_chains, n_keep=n_keep)
-        return Cs
-
-    def ref_posterior(self, Ce, n_draws, gen=None, warmup=1500):
-        n_chains = 8
-        Cs = self.hmc(Ce, n_chains=n_chains, n_keep=int(math.ceil(n_draws / n_chains)), warmup=warmup, gen=gen)
-        idx = torch.randperm(Cs.shape[1], generator=gen).to(Cs.device)
-        return Cs[:, idx][:, :n_draws]
-
-
-
-# --------------------------------------------------------------------------- #
 # AR1Toy: C(rho)_ij = rho^|i-j|, rho ~ Uniform(0.3, 1.0) (sample_ar1's law, fixed range,
 # not configurable). A single scalar parameter -> exact 1D-quadrature reference posterior,
 # no MCMC needed.
@@ -605,7 +483,7 @@ class AR1Toy:
 # --------------------------------------------------------------------------- #
 # HeteroskedasticToy: C = F F^T + diag(d) -- F (p x r) unconstrained Gaussian, columns
 # independently rescaled by a loading-strength ~ Uniform(scale_min,scale_max); d ~
-# Uniform(d_min,d_max) idiosyncratic. No orthogonality constraint on F (unlike Spiked/IsoDiag's
+# Uniform(d_min,d_max) idiosyncratic. No orthogonality constraint on F (unlike IsoDiag's
 # U), so plain HMC on a single flat unconstrained parameter vector is exact -- same structure as
 # WishartToy's HMC, just a different potential/C_from (no Givens/Stiefel step needed).
 # --------------------------------------------------------------------------- #
@@ -866,7 +744,7 @@ class IsoDiagToy:
 
     def __init__(self, name, p, N, M, spike_mean=3.0, spike_std=1.0):
         if spike_mean < spike_std:
-            raise ValueError("need spike_mean >= spike_std (same guard as sample_spiked)")
+            raise ValueError("need spike_mean >= spike_std")
         self.name, self.p, self.N, self.M = name, p, N, M
         self.d = p                                                    # alias: toy_train.py and the evaluation scripts expect `.d`
         self.r = p   # always full rank -- no diagonal floor to support r<p
@@ -875,7 +753,7 @@ class IsoDiagToy:
 
     def sample_prior(self, n, gen=None):
         """M = U diag(spikes) U^T: U (p,p) Haar-orthonormal (full rank), spikes genuinely truncated
-        normal. Same construction as SpikedModelToy, minus the diagonal (D) term."""
+        normal."""
         U = cholesky_qr(torch.randn(n, self.p, self.p, dtype=DT, generator=gen))
         spikes = trunc_normal((n, self.p), self.spike_mean, self.spike_std, self.spike_a, self.spike_b, gen)
         return self.C_from(U, spikes)

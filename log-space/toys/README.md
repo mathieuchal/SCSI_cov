@@ -35,7 +35,7 @@ Each setting is defined in one place:
 | `logscore.py`, `w1.py` | the scoring of each method (oracle, IW-ML, SC-SI), with its sampling seeds |
 | `runs.py` | loading a checkpoint, listing the checkpoints of a run |
 | `toy_logscore_{oracle,scsi}.py`, `toy_W1_{oracle,scsi}.py` | the evaluation scripts (steps 2 and 3) |
-| `toy_logscore_w1_curve.py`, `toy_paper_table.py`, `toy_w1_tables.py` | the figure and the tables (step 4) |
+| `toy_logscore_w1_curve.py`, `toy_logscore_w1_curve_spectral.py`, `toy_paper_table.py`, `toy_w1_tables.py` | the figures and the tables (step 4) |
 
 **Data regimes.** A toy name ends with its regime: `{base}_d8_inf` for infinite data (a fresh training ensemble at every E-step, `toy.M == -1`), `{base}_d8_M5000` for one fixed training ensemble of M=5000 noisy Ce. Results go to `results/toys_M=-1/` or `results/toys_M=5000/`, figures and tables to `figs/` or `figs_M=5000/`. The scripts that handle one toy derive the folder from its name. The evaluation and table scripts take `--data inf|M5000` (default `inf`). By default the evaluation scripts process every run of that regime present on disk; `--toys a,b` restricts them.
 
@@ -119,6 +119,7 @@ W1 is computed on 128 test tasks (`toy_data.make_testset`, `Generator(777)`), ag
 python toy_logscore_w1_curve.py               # figs/logscore_w1_vs_k_d8.png          (W1 median)
 python toy_logscore_w1_curve.py --mean        # figs/logscore_w1_vs_k_d8_meanW1.png   (W1 mean)
 python toy_logscore_w1_curve.py --no_hetero   # figs/logscore_w1_vs_k_d8_nohetero.png
+python toy_logscore_w1_curve_spectral.py      # figs/logscore_w1_vs_k_d8_spectral.png   (with the spectral runs)
 python toy_paper_table.py                     # figs/toy_paper_table.txt   (paper table, LaTeX rows)
 python toy_w1_tables.py                       # figs/toy_w1_table_{mean,median}.{md,tex}   (W1 only)
 ```
@@ -132,11 +133,13 @@ With `--data M5000`, the tables go to `figs_M=5000/`. The figure is drawn for M=
 
 **The paper table** reads `{toy}_logscore.json` and `{toy}_W1.json`, so it reports SC-SI at `best_k`. Its columns are the log-score gap, oracle − method, paired over the 10 pairs, then the six W1 statistics and their average. It writes two tables, W1 median and W1 mean. For the IW toys, the IW-ML gap is the closed-form expected gap `IW_EXACT_EXPECTED` (−0.001), defined in `toy_logscore_w1_curve.py`.
 
-Nothing is recomputed in step 4: steps 1–3 produce every number.
+**The spectral figure** (`toy_logscore_w1_curve_spectral.py`) is the `--no_hetero` figure with, in green, the SC-SI runs of the spectral-Föllmer variant in the IW-RI and iso-diagonal columns. These runs were trained and evaluated in [`spectra-space`](../../spectra-space); only their curves are kept here, in `results/toys_M=-1/spectra/`. Their log-score gap is a difference of means at J=2·10⁵, not a paired difference at J=2·10⁶ like the blue curves, because their files hold no per-pair values.
+
+Nothing is recomputed in step 4: steps 1–3 produce every number, except the spectral curves.
 
 ## Finite data: the M=5000 runs
 
-`toys.py` also defines `{toy}_d8_M5000`, the finite-data counterparts of the production toys: same prior, N=40 and architecture, but one fixed training ensemble of M=5000 noisy Ce, and one training stage (k=0..700, cosine outer lr). Three of them were trained by `train_M5000.sh`: `iw_nonri`, `factor` and `diag`, in about 1 h each on one GPU.
+`toys.py` also defines `{toy}_d8_M5000`, the finite-data counterparts of the production toys: same prior, N=40 and architecture, but one fixed training ensemble of M=5000 noisy Ce, and one training stage (k=0..700, cosine outer lr). `train_M5000.sh` trains six of them, all but AR(1), in about 35 min to 1 h each on one GPU.
 
 They go through steps 1 to 4 with `--data M5000`. Two points differ from M=inf:
 - `best_k` is chosen by `toy_logscore_scsi.py` (step 2), as the argmax of the log-score trajectory, so step 2 must run before `toy_W1_scsi.py` (step 3);

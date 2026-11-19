@@ -83,7 +83,7 @@ if __name__ == "__main__":
         if a.no_report:
             continue
         doc = json.load(open(ls_path)) if os.path.exists(ls_path) else {}
-        doc = {"toy": name, "n_val": a.n_val, "J": a.J, "N": toy.N, "d": toy.d, **doc}
+        doc = doc or {"toy": name, "N": toy.N, "d": toy.d}             # new file: J, n_val, val_seed set by check_key
         check_key(doc, (a.J, a.n_val, val_seed(toy, "report")), "", ls_path)
         if (doc.get("scsi", {}).get("tag"), doc.get("scsi", {}).get("k")) != (tag, best_k):
             if shared and best_k in entries:

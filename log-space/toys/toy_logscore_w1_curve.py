@@ -53,7 +53,8 @@ def paired(a, b):
     return x.mean(), x.std(ddof=1) / math.sqrt(len(x))
 
 
-def main(J=2000000, n_val=10, out=f"{paths.figs_dir('inf')}/logscore_w1_vs_k_d8.png", agg="median", toys=None):
+def main(J=2000000, n_val=10, out=f"{paths.figs_dir('inf')}/logscore_w1_vs_k_d8.png", agg="median", toys=None, overlay=None):
+    """overlay(fig): optional extra drawing on the finished figure, before saving (toy_logscore_w1_curve_spectral.py)"""
     TOYS = toys if toys is not None else globals()["TOYS"]
     fig, axs = plt.subplots(2, len(TOYS), figsize=(COL_W * len(TOYS), 4.8), sharex="col",
                             gridspec_kw={"height_ratios": [1, 0.9]})
@@ -140,6 +141,8 @@ def main(J=2000000, n_val=10, out=f"{paths.figs_dir('inf')}/logscore_w1_vs_k_d8.
     fig.suptitle("d=8 toys, N=40 -- SC-SI log-score gap to the oracle and " + ("mean-W1" if agg == "mean" else "W1") + " along training", x=0.01, ha="left",
                  fontsize=12, fontweight="semibold")
     fig.tight_layout(rect=(0, 0.04, 1, 0.96), w_pad=0.4)
+    if overlay is not None:
+        overlay(fig)
     fig.savefig(out, dpi=170)
     print("saved", out)
 
