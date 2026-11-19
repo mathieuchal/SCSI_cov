@@ -17,6 +17,17 @@ For each toy, in order:
    `results/toys/{toy}_spectral_follmer_k{k}.pt`, best one copied to `{toy}_spectral_follmer_model.pt`.
    A small-J (64) validation log-score curve is written to `{toy}_spectral_follmer_train.json`'s
    `val_curve` as training runs, and `best_k` picked from it.
+
+   `iso_diag_d8_inf` was trained in **two separate `toy_train.py` calls**, not one (`train_iso_diag_d8.sh`
+   runs `--n_outer 120` first, then `--resume .../k120.pt --n_outer 240`). This is NOT interchangeable
+   with a single `--n_outer 240` call from scratch: each outer iteration's own (inner) cosine LR ceiling,
+   `_outer_lr0(k)`, anneals across `1..cfg.n_outer` of *that specific call* -- stage 1 (`n_outer=120`)
+   decays all the way to its floor by `k=120`, then stage 2 (`n_outer=240`) recomputes `frac` from `k=121`
+   against its own, longer `n_outer=240`, landing roughly at that schedule's *midpoint* rather than
+   continuing stage 1's decay. Concretely: `lr0` is `1e-5` at `k=120` (stage 1's floor) then jumps to
+   `2.5e-4` at `k=121` (stage 2's own `k=121` position, not `k=1`'s `5e-4` ceiling -- `k` itself stays
+   globally continuous across the resume, only each call's own `n_outer` denominator changes). A single
+   continuous `--n_outer 240` run would never see this jump. `iw_ri_d8_inf` is single-stage, unaffected.
 2. **Oracle / IW-ML log-score** (`log_score_oracle.py`'s `eval_oracle_IW_log_score`) -- the reference
    posterior's predictive log-score (exact formula if the toy has one, else an HMC chain) and the
    conjugate IW-ML baseline, at a much larger J (default 2e5, n_val=10) than training's own curve --
