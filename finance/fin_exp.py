@@ -1,0 +1,550 @@
+"""Finance experiment: dynamic selection of meaningful eigendirections from a covariance *posterior*.
+
+Data   : Ken French 48 industry portfolios, daily value-weighted returns 1926-2026 (zero-mean model).
+Task   : (63-day window, random basket of d=12 industries fully observed in the window).
+Prior  : learned by SC-SI from PAST windows only (non-overlapping, several random baskets per window),
+         refitted on three expanding folds; test months 1995-2004 / 2005-2014 / 2015-2026.
+Decision: number K of factors of the PCA factor model  C_K = sum_{k<=K} l_k u_k u_k^T + s_K^2 (I - P_K)
+          * plug-in rules : Gavish-Donoho hard threshold on the sample spectrum, fixed K in {1,2,3}, K = d (SCM)
+          * Bayes rule    : K minimising the *posterior expected Stein loss*  E[L_S(C_K(Ce), C) | Ce]
+          Also: posterior-mean / Stein-optimal covariance, IW conjugate baseline, OAS shrinkage.
+Scores : out-of-sample (next 21 days) min-variance-portfolio volatility, predictive log-score, calibration.
+"""
+import argparse, json, math, os, time
+import numpy as np, pandas as pd
+import sys
+import torch
+
+# shared code: scsi / model / covutils (and plotstyle) are the single copies maintained in log-space/toys
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "log-space", "toys"))
+from scsi import SCSI, SCSIConfig, Sym, wishart_channel, DT, safe_eigvalsh
+from model import make_drift
+from covutils import (IWPrior, oas_shrink, nls_shrink, wishart_logscore, posterior_predictive_logscore, directional_pit, daily_return_logscore, daily_t_logscore,
+                      coverage_from_pit, bootstrap_ci, worst_case_pit_ks)
+
+ap = argparse.ArgumentParser()
+ap.add_argument("--d", type=int, default=12)
+ap.add_argument("--nw", type=int, default=63, help="Window size (i.e. number of observations) for learning prior")
+ap.add_argument("--nf", type=int, default=21, help="Size of the forward window for evaluation")
+ap.add_argument("--paths", type=int, default=8)
+ap.add_argument("--subsets_per_window", type=int, default=16)
+ap.add_argument("--n_outer", type=int, default=15)
+ap.add_argument("--steps_first", type=int, default=4000)
+ap.add_argument("--steps_outer", type=int, default=800)
+ap.add_argument("--neff_scale", type=float, default=None, help="if None, calibrated on validation fold with the IW baseline")
+ap.add_argument("--neff_scale_fwd", type=float, default=None, help="separate N_eff scale for the forward channel "
+                "(N_forward = round(nf * neff_scale_fwd)); None = same scale as the calibration channel")
+ap.add_argument("--nfe_min", type=int, default=None, help="floor on the forward-channel dof N_forward = round(nf * scale); "
+                 "default d (full-rank predictive Wishart). Below d the predictive Ce is rank-deficient "
+                 "(worst_case_pit_ks then drops logdet/logcond) -- e.g. 3 reproduces the original code")
+ap.add_argument("--J", type=int, default=256, help="Number of SC-SI posterior samples for evaluation")
+ap.add_argument("--threads", type=int, default=4)
+ap.add_argument("--folds", default="1995,2005,2015")
+ap.add_argument("--seed", type=int, default=0)
+ap.add_argument("--tag", default="")
+ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+ap.add_argument("--hidden", type=int, default=256)
+ap.add_argument("--depth", type=int, default=4)
+ap.add_argument("--activation", default="silu", choices=["silu", "relu", "gelu", "tanh"])
+ap.add_argument("--n_sde_steps", type=int, default=64)
+ap.add_argument("--val_years", type=float, default=3.0,
+                help="years immediately before each fold's training cutoff held out (excluded from the training "
+                     "ensemble) for in-fold checkpoint-selection validation pairs")
+ap.add_argument("--ck", default="0,2,4,6,8,10,12,15,20,25,30",
+                help="comma-separated outer iterations at which to checkpoint and validate")
+ap.add_argument("--force_ks", default=None,
+                help="comma-separated outer iteration to evaluate per fold (e.g. 6,2,6), from ALREADY-SAVED checkpoints; "
+                     "refuses to train, so it can never overwrite an existing run. Results get a _ks<...> suffix.")
+ap.add_argument("--diag_ks", action="store_true",
+                help="diagnostic only (needs the saved checkpoints of the run with the same --tag): worst-case PIT-KS "
+                     "functionals on the in-fold validation pairs for the IW posterior, OAS/LW/SCM plug-ins and every "
+                     "saved SC-SI checkpoint; writes results/<TAG>_diag_ks.json and exits (no training, no test eval)")
+ap.add_argument("--select", default="ks", choices=["ks", "logscore", "tscore"],
+                help="checkpoint-selection criterion on the in-fold validation pairs: worst-case PIT-KS (ks), "
+                     "tempered Wishart posterior-predictive log-score (logscore), or the Student-t log-score of the "
+                     "forward DAILY RETURNS (tscore; proper score, no N_forward; nu fitted per fold on the same "
+                     "validation returns with the OAS plug-in; 256 posterior draws per pair, seed 1)")
+ap.add_argument("--no_select", action="store_true",
+                help="skip worst-case-PIT-KS checkpoint selection; always use the last outer iteration "
+                     "(n_outer), i.e. train blindly the way the original code did")
+args = ap.parse_args()
+torch.set_num_threads(args.threads)
+dev = torch.device(args.device)
+d, NW, NF, J = args.d, args.nw, args.nf, args.J
+TAG = f"fin_d{d}_nw{NW}_s{args.seed}{args.tag}"
+FORCE = None if args.force_ks is None else [int(x) for x in args.force_ks.split(",")]
+OUT = TAG + ("" if FORCE is None else "_ks" + "-".join(map(str, FORCE))) + {"ks": "", "logscore": "_selLS", "tscore": "_selT"}[args.select]       # result files; checkpoints/val curves stay under TAG
+os.makedirs("results", exist_ok=True)
+print(f"device={dev}", flush=True)
+
+df = pd.read_pickle("data/ff48_vw_daily.pkl")
+R = df.values.astype(np.float64)                      # % daily returns
+dates = df.index
+T, A = R.shape
+S_ = Sym(d, device=dev)
+year = dates.year.values
+first_idx = lambda y: int(np.searchsorted(year, y))    # first row of calendar year y
+
+
+def window_ok(e, assets, nf=NF):
+    seg = R[e - NW + 1: e + 1 + nf, assets]
+    return not np.isnan(seg).any()
+
+
+def scm(e, assets, lo=None, hi=None):
+    X = R[e - NW + 1: e + 1, assets] if lo is None else R[lo:hi, assets]
+    return X.T @ X / len(X)
+
+
+def train_tasks(train_end_idx, rng):
+    """non-overlapping windows ending before train_end_idx; several random baskets per window"""
+    out = []
+    for e in range(NW - 1, train_end_idx - 1, NW):
+        seg = R[e - NW + 1: e + 1]
+        avail = np.where(~np.isnan(seg).any(0))[0]
+        if len(avail) < d:
+            continue
+        for _ in range(args.subsets_per_window):
+            a = np.sort(rng.choice(avail, d, replace=False))
+            out.append(scm(e, a))
+    return torch.tensor(np.stack(out), dtype=DT, device=dev)
+
+
+def test_paths(train_end_idx, test_end_idx, rng):
+    """B fixed baskets ('paths') drawn from assets with data over the whole fold; monthly forecasts."""
+    lo = train_end_idx - 2 * 252
+    cols = np.where(~np.isnan(R[lo:test_end_idx]).any(0))[0]
+    baskets = [np.sort(rng.choice(cols, d, replace=False)) for _ in range(args.paths)]
+    ends = list(range(train_end_idx, test_end_idx - NF, 21))
+    return baskets, ends
+
+
+# ------------------------------------------------------------------------------------------------ #
+# factor-count rules
+# ------------------------------------------------------------------------------------------------ #
+def gd_omega(beta):
+    return 0.56 * beta ** 3 - 0.95 * beta ** 2 + 1.82 * beta + 1.43
+
+
+def gd_K(l, N):
+    """Gavish-Donoho (2014) optimal hard threshold, unknown noise level.  l: (...,d) ascending eigenvalues."""
+    beta = l.shape[-1] / N
+    thr = gd_omega(beta) ** 2 * l.median(-1).values
+    return (l > thr[..., None]).sum(-1)
+
+
+def pca_factor_family(Ce):
+    """all rank-K factor covariances C_K (K=0..d) built from Ce.  Returns (...,d+1,d,d)."""
+    l, U = torch.linalg.eigh(Ce)                       # ascending
+    l = l.flip(-1); U = U.flip(-1)                     # descending
+    out = []
+    for K in range(d + 1):
+        if K == d:
+            lam = l
+        else:
+            s2 = l[..., K:].mean(-1, keepdim=True)
+            lam = torch.cat([l[..., :K], s2.expand(*s2.shape[:-1], d - K)], -1)
+        out.append((U * lam.unsqueeze(-2)) @ U.transpose(-1, -2))
+    return torch.stack(out, -3)
+
+
+def stein_loss(Ahat, C):
+    """L_S(Ahat, C) = tr(Ahat^-1 C) - log det(Ahat^-1 C) - d ; broadcasts."""
+    M = torch.linalg.solve(Ahat, C)
+    return torch.einsum("...ii->...", M) - torch.linalg.slogdet(M)[1] - d
+
+
+def posterior_K(Cal, draws):
+    """Bayes rule: argmin_K E[L_S(C_K(Ce), C) | Ce] using posterior draws (M,J,d,d)."""
+    fam = pca_factor_family(Cal)                                   # (M,d+1,d,d)
+    risk = torch.stack([stein_loss(fam[:, K:K + 1], draws).mean(1) for K in range(d + 1)], 1)   # (M,d+1)
+    return risk.argmin(1), risk
+
+
+def mv_weights(C):
+    x = torch.linalg.solve(C, torch.ones(C.shape[-1], 1, dtype=C.dtype, device=C.device).expand(*C.shape[:-2], -1, -1))
+    return (x / x.sum((-1, -2), keepdim=True)).squeeze(-1)
+
+
+# ------------------------------------------------------------------------------------------------ #
+# effective sample-size calibration (IW proxy; cheap) on a validation fold that precedes all test folds
+# ------------------------------------------------------------------------------------------------ #
+def make_cases(baskets, ends):
+    cal, fwd, meta = [], [], []
+    for b, a in enumerate(baskets):
+        for e in ends:
+            if not window_ok(e, a):
+                continue
+            cal.append(scm(e, a)); fwd.append(scm(e, a, e + 1, e + 1 + NF)); meta.append((b, e))
+    return torch.tensor(np.stack(cal), dtype=DT, device=dev), torch.tensor(np.stack(fwd), dtype=DT, device=dev), np.array(meta)
+
+
+def fold_val_pairs(val_start, val_end, rng, n_baskets=8):
+    """(calibration window, next-21-day window) pairs from a slice of time held out from training, used only for
+    in-fold checkpoint selection -- mirrors eeg_exp.py's held-out-subject validation split and make_cases'
+    (Cal, Fwd) structure, applied to a held-out *time slice* instead of held-out subjects since finance has no
+    natural subject axis. Returns None if the slice has too little data (short first fold)."""
+    lo = max(val_start - 2 * 252, 0)
+    cols = np.where(~np.isnan(R[lo:val_end]).any(0))[0]
+    if len(cols) < d:
+        return None, None, None, None
+    baskets = [np.sort(rng.choice(cols, d, replace=False)) for _ in range(n_baskets)]
+    ends = list(range(val_start + NW - 1, val_end - NF, 21))
+    if not ends:
+        return None, None, None, None
+    return (*make_cases(baskets, ends), baskets)
+
+
+def calibrate_neff(rng):
+    tr_end = first_idx(1985); va_end = first_idx(1995)
+    Ce_tr = train_tasks(tr_end, rng)
+    baskets, ends = test_paths(tr_end, va_end, rng)
+    Cal, Fwd, meta = make_cases(baskets, ends)
+    best, table = None, {}
+    for sc in (0.1, 0.2, 0.3, 0.45, 0.6, 0.8, 1.0):
+        N = max(int(round(NW * sc)), d + 2); Nf = max(int(round(NF * sc)), 3)
+        iw = IWPrior(Ce_tr, N, iters=300)
+        Cs = iw.sample_posterior(Cal, 128, gen=torch.Generator(device=dev).manual_seed(1))
+        dirs = torch.eye(d, dtype=DT, device=dev)
+        pit, _, _ = directional_pit(Fwd, Nf, Cs, dirs, gen=torch.Generator(device=dev).manual_seed(2))
+        cov = coverage_from_pit(pit)
+        score = float(posterior_predictive_logscore(Fwd, Nf, Cs).mean())
+        err = sum(abs(cov[k] - k) for k in cov)
+        table[sc] = dict(cov=cov, calib_err=err, logscore=score, N=N)
+        print(f"  neff_scale={sc}: N={N} coverage={cov}  calib_err={err:.3f} logscore={score:.3f}", flush=True)
+        if best is None or err < table[best]["calib_err"]:
+            best = sc
+    return best, table
+
+rng = np.random.default_rng(args.seed)
+if args.neff_scale is None:
+    print("calibrating N_eff scale on validation fold (train <1985, val 1985-1994) with the IW proxy ...")
+    scale, calib_table = calibrate_neff(np.random.default_rng(args.seed + 100))
+else:
+    scale, calib_table = args.neff_scale, {}
+
+N = max(int(round(NW * scale)), d + 2); scale_f = scale if args.neff_scale_fwd is None else args.neff_scale_fwd
+NfE = max(int(round(NF * scale_f)), d if args.nfe_min is None else args.nfe_min)
+print(f"N_eff scale = {scale}  ->  N = {N} (window {NW}), N_forward = {NfE};  N/d = {N/d:.1f}")
+
+# ------------------------------------------------------------------------------------------------ #
+# folds
+# ------------------------------------------------------------------------------------------------ #
+fold_years = [int(y) for y in args.folds.split(",")]
+fold_bounds = [(fold_years[i], fold_years[i + 1] if i + 1 < len(fold_years) else 2027) for i in range(len(fold_years))]
+all_rows = []          # per-case records
+path_records = []      # time series for figures
+names = ["SCM", "OAS shrinkage", "LW nonlinear shrinkage", "PCA K=1", "PCA K=3", "PCA K=GD (plug-in)", "PCA K=Bayes (SC-SI)", "PCA K=Bayes (IW)",
+         "IW post. mean", "SC-SI post. mean", "SC-SI Stein-opt."]
+out_cases = {n: {"var": [], "stein_fwd": []} for n in names}
+Ks = {"GD": [], "post": [], "postIW": []}
+meta_all, fold_all, ll_scores = [], [], {"SCM": [], "OAS shrinkage": [], "LW nonlinear shrinkage": [], "IW": [], "SC-SI": []}
+dl_scores = {k: [] for k in ll_scores}          # per-day log-score of the forward daily returns (nats/day)
+dt_scores = {k: [] for k in ll_scores}          # same, Student-t predictive with covariance C and the fold's nu (nats/day)
+NU_GRID = [2.5, 3, 3.5, 4, 4.5, 5, 5.2, 6, 7, 8, 10, 15, 30, 100]
+NU_DEFAULT = 7.0
+NU_HAT, TSEL = {}, {}
+pit_store = {"OAS shrinkage": [], "LW nonlinear shrinkage": [], "IW": [], "SC-SI": [], "SCM": []}
+risk_store = []
+fac_store = {k: [] for k in ('pm_post', 'pm_plug', 'nm_mean', 'nm_sd')}    # per-case posterior of the number of meaningful factors
+
+diag_out = {}
+for fi, (y0, y1) in enumerate(fold_bounds):
+    t0 = time.time()
+    #Training and test end time
+    tr_end, te_end = first_idx(y0), min(first_idx(y1), T)
+    frng = np.random.default_rng(args.seed + 10 * fi)
+    val_start = max(tr_end - int(round(args.val_years * 252)), NW)
+    #Training covariance matrices
+    Ce_tr = train_tasks(val_start, frng)
+    print(f"\n=== fold {fi}: train < {y0}, test {y0}-{y1-1}:  M={len(Ce_tr)} training covariances "
+          f"(last {args.val_years:.0f}y before cutoff held out for validation)", flush=True)
+    #
+    baskets, ends = test_paths(tr_end, te_end, frng)
+    Cal, Fwd, meta = make_cases(baskets, ends)
+    print(f"    test cases: {len(Cal)}", flush=True)
+    Cal_val, Fwd_val, meta_val, b_val = fold_val_pairs(val_start, tr_end, np.random.default_rng(args.seed + 10 * fi + 5))
+    # Student-t degrees of freedom for this fold: maximise the validation daily t log-score of the OAS plug-in (n=N)
+    if Cal_val is not None:
+        Rf_val = torch.tensor(np.stack([R[e + 1: e + 1 + NF][:, b_val[b]] for b, e in meta_val]), dtype=DT, device=dev)
+        _oas_val = oas_shrink(Cal_val, N)[:, None]
+        nu_curve = {nu: float(daily_t_logscore(Rf_val, _oas_val, nu).mean()) for nu in NU_GRID}
+        NU_HAT[fi] = max(NU_GRID, key=nu_curve.get)
+    else:
+        NU_HAT[fi] = NU_DEFAULT
+    print(f"    Student-t nu for this fold (validation, OAS plug-in): {NU_HAT[fi]}", flush=True)
+    print(f"    in-fold validation cases (held out from training): {0 if Cal_val is None else len(Cal_val)}", flush=True)
+
+    cfg = SCSIConfig(N=N, d=d, kappa=1.0, n_outer=args.n_outer, steps_first=args.steps_first, steps_outer=args.steps_outer,
+                     seed=args.seed + fi, init="deconv", log_prior_inflate=1.5, threads=args.threads, n_recon=6, device=str(dev),
+                     hidden=args.hidden, depth=args.depth, activation=args.activation, n_sde_steps=args.n_sde_steps)
+    model = SCSI(cfg)
+    ck_dir = f"results/{TAG}_fold{fi}_ckpt"
+    os.makedirs(ck_dir, exist_ok=True)
+    CK = [k for k in (int(x) for x in args.ck.split(',')) if k <= args.n_outer]
+
+    def _save_ckpt(net, k):
+        torch.save({"state": {kk: v.cpu() for kk, v in net.state_dict().items()},
+                    "mu": net.mu.cpu().clone(), "sd": net.sd.cpu().clone(),
+                    "hidden": args.hidden, "depth": args.depth, "activation": args.activation}, f"{ck_dir}/k{k}.pt")
+
+    val_curve, val_wc = {}, {}
+
+    def cb(m, k, Cal_val=Cal_val, Fwd_val=Fwd_val):
+        if k in CK:
+            _save_ckpt(m.ema_net, k)
+            if Cal_val is not None:
+                Cs = m.sample_posterior(Cal_val, 64).to(dev)          # scsi.sample_posterior returns CPU draws
+                val_curve[k] = float(posterior_predictive_logscore(Fwd_val, NfE, Cs).mean())
+                wc, ks = worst_case_pit_ks(Fwd_val, NfE, Cs, Cal_val)
+                val_wc[k] = wc
+                print(f"    [val] outer {k}: predictive log-score = {val_curve[k]:.3f}  worst_ks = {wc:.3f}  ("
+                      + ", ".join(f"{n}={v:.3f}" for n, v in ks.items()) + ")", flush=True)
+
+    val_json = f"results/{TAG}_fold{fi}_val.json"
+    have = all(os.path.exists(f"{ck_dir}/k{k}.pt") for k in CK) and os.path.exists(val_json)
+    if have:
+        dd = json.load(open(val_json))
+        val_curve = {int(k): v for k, v in dd["logscore"].items()}
+        val_wc = {int(k): v for k, v in dd["worst_ks"].items()}
+        print("    loaded cached checkpoints")
+    else:
+        if FORCE is not None:
+            raise SystemExit(f"--force_ks needs the saved checkpoints of {TAG} (fold {fi}); pass the same --ck/--n_outer/--tag as the original run. Not training.")
+        model.fit(Ce_tr, callback=cb)
+        json.dump({"logscore": val_curve, "worst_ks": val_wc}, open(val_json, "w"))
+
+    if args.diag_ks:
+        if not have:
+            raise SystemExit(f"--diag_ks needs the saved checkpoints and val json of {TAG} (fold {fi}). Not training.")
+        if Cal_val is None:
+            continue
+        JD = 64                                                     # same number of draws as the training-time validation
+        rows = {}
+        gd = lambda s_: torch.Generator(device=dev).manual_seed(s_)
+        iwv = IWPrior(Ce_tr, N, iters=600)
+        rows["IW posterior"] = worst_case_pit_ks(Fwd_val, NfE, iwv.sample_posterior(Cal_val, JD, gen=gd(1)), Cal_val, gen=gd(2))
+        for nm_, Ch in (("OAS plug-in", oas_shrink(Cal_val, N)), ("LW plug-in", nls_shrink(Cal_val, N)), ("SCM plug-in", Cal_val)):
+            rows[nm_] = worst_case_pit_ks(Fwd_val, NfE, Ch.unsqueeze(1).expand(-1, JD, -1, -1).contiguous(), Cal_val, gen=gd(2))
+        for k in CK:
+            zk = torch.load(f"{ck_dir}/k{k}.pt", map_location="cpu")
+            model.ema_net = make_drift("mlp", S_.p, zk["mu"], zk["sd"], hidden=zk.get("hidden", args.hidden),
+                                       depth=zk.get("depth", args.depth), activation=zk.get("activation", args.activation)).to(dev)
+            model.ema_net.load_state_dict(zk["state"]); model.ema_net.eval()
+            rows[f"SC-SI k={k}"] = worst_case_pit_ks(Fwd_val, NfE, model.sample_posterior(Cal_val, JD, gen=gd(1)).to(dev),
+                                                     Cal_val, gen=gd(2))
+        print(f"    diag_ks fold {fi} ({len(Cal_val)} val pairs, N={N}, N_forward={NfE}):", flush=True)
+        for nm_, (wc_, ks_) in rows.items():
+            print(f"      {nm_:<14s} worst={wc_:.3f}  " + "  ".join(f"{n}={v:.3f}" for n, v in ks_.items()), flush=True)
+        diag_out[fi] = {nm_: {"worst": wc_, **ks_} for nm_, (wc_, ks_) in rows.items()}
+        continue
+
+    if args.select == "tscore" and FORCE is None and not args.no_select and Cal_val is not None:
+        dd = json.load(open(val_json))
+        key = f"tscore_nu{NU_HAT[fi]:g}"
+        if key not in dd:
+            tsc = {}
+            for k in CK:
+                zk = torch.load(f"{ck_dir}/k{k}.pt", map_location="cpu")
+                model.ema_net = make_drift("mlp", S_.p, zk["mu"], zk["sd"], hidden=zk.get("hidden", args.hidden),
+                                           depth=zk.get("depth", args.depth), activation=zk.get("activation", args.activation)).to(dev)
+                model.ema_net.load_state_dict(zk["state"]); model.ema_net.eval()
+                Cs_v = model.sample_posterior(Cal_val, 256, gen=torch.Generator(device=dev).manual_seed(1)).to(dev)
+                tsc[k] = float(daily_t_logscore(Rf_val, Cs_v, NU_HAT[fi]).mean())
+            dd[key] = tsc; json.dump(dd, open(val_json, "w"))
+        TSEL[fi] = {int(k): v for k, v in dd[key].items()}
+        print("    validation Student-t daily log-score by k: " + " ".join(f"{k}:{v:.4f}" for k, v in sorted(TSEL[fi].items())), flush=True)
+
+    if FORCE is not None:
+        kbest = FORCE[fi]
+    elif args.no_select:
+        kbest = args.n_outer
+    else:
+        if args.select == "logscore":
+            kbest = max(val_curve, key=val_curve.get) if val_curve else max(CK)
+        elif args.select == "tscore":
+            kbest = max(TSEL[fi], key=TSEL[fi].get) if fi in TSEL else max(CK)
+        else:
+            kbest = min(val_wc, key=val_wc.get) if val_wc else max(CK)
+    zck = torch.load(f"{ck_dir}/k{kbest}.pt", map_location="cpu")
+    # rebuild the drift from the checkpoint's own normalisation (mu, sd), as toy_eval.load_scsi does: Drift.out_scale
+    # is derived from sd at construction and is not a buffer, so it must come from the training-time sd
+    model.ema_net = make_drift("mlp", S_.p, zck["mu"], zck["sd"], hidden=zck.get("hidden", args.hidden),
+                               depth=zck.get("depth", args.depth), activation=zck.get("activation", args.activation)).to(dev)
+    model.ema_net.load_state_dict(zck["state"])
+    model.ema_net.eval()
+    if FORCE is not None:
+        print(f"    --force_ks: evaluating outer iteration {kbest} "
+              f"(worst-case PIT-KS over all functionals would have picked {min(val_wc, key=val_wc.get) if val_wc else 'n/a'})", flush=True)
+    elif args.no_select:
+        print(f"    --no_select: using last outer iteration {kbest} unconditionally "
+              f"(worst-case PIT-KS would have picked {min(val_wc, key=val_wc.get) if val_wc else 'n/a'})", flush=True)
+    elif args.select == "tscore" and fi in TSEL:
+        print(f"    selected outer iteration {kbest} by validation Student-t daily log-score={TSEL[fi][kbest]:.4f} (nu={NU_HAT[fi]:g}; "
+              f"worst-case PIT-KS would have picked {min(val_wc, key=val_wc.get) if val_wc else 'n/a'})", flush=True)
+    elif args.select == "logscore" and val_curve:
+        print(f"    selected outer iteration {kbest} by validation log-score={val_curve[kbest]:.3f} "
+              f"(worst-case PIT-KS would have picked {min(val_wc, key=val_wc.get) if val_wc else 'n/a'})", flush=True)
+    elif val_wc:
+        print(f"    selected outer iteration {kbest} by worst-case PIT-KS={val_wc[kbest]:.3f} "
+              f"(log-score would have picked {max(val_curve, key=val_curve.get)})", flush=True)
+    else:
+        print(f"    no in-fold validation data available; using last outer iteration {kbest}", flush=True)
+    iw = IWPrior(Ce_tr, N, iters=600)
+    g = torch.Generator(device=dev).manual_seed(100 + fi)
+    D_si = model.sample_posterior(Cal, J, gen=g).to(dev)
+    D_iw = iw.sample_posterior(Cal, J, gen=g)
+    print(f"    sampling done ({time.time()-t0:.0f}s total)", flush=True)
+
+    # ---- estimators ------------------------------------------------------------------------- #
+    fam = pca_factor_family(Cal)
+    lcal = torch.linalg.eigvalsh(Cal)
+    K_gd = gd_K(lcal, N)
+    K_si, risk_si = posterior_K(Cal, D_si)
+    K_iw, _ = posterior_K(Cal, D_iw)
+    idx = torch.arange(len(Cal), device=dev)
+    est = {
+        "SCM": Cal,
+        "OAS shrinkage": oas_shrink(Cal, N),
+        "LW nonlinear shrinkage": nls_shrink(Cal, N),
+        "PCA K=1": fam[:, 1], "PCA K=3": fam[:, 3],
+        "PCA K=GD (plug-in)": fam[idx, K_gd.clamp(0, d)],
+        "PCA K=Bayes (SC-SI)": fam[idx, K_si],
+        "PCA K=Bayes (IW)": fam[idx, K_iw],
+        "IW post. mean": D_iw.mean(1),
+        "SC-SI post. mean": D_si.mean(1),
+        "SC-SI Stein-opt.": torch.linalg.inv(torch.linalg.inv(D_si).mean(1)),
+    }
+    for n_, C_hat in est.items():
+        w = mv_weights(C_hat)
+        out_cases[n_]["var"].append(torch.einsum("mi,mij,mj->m", w, Fwd, w).cpu().numpy())
+        out_cases[n_]["stein_fwd"].append(stein_loss(C_hat, Fwd).cpu().numpy())
+    Ks["GD"].append(K_gd.cpu().numpy()); Ks["post"].append(K_si.cpu().numpy()); Ks["postIW"].append(K_iw.cpu().numpy())
+    meta_all.append(meta); fold_all.append(np.full(len(Cal), fi))
+    risk_store.append(risk_si.cpu().numpy())
+    # predictive log-scores of the forward window
+    ll_scores["SCM"].append(wishart_logscore(Fwd, NfE, Cal).cpu().numpy())
+    ll_scores["OAS shrinkage"].append(wishart_logscore(Fwd, NfE, est["OAS shrinkage"]).cpu().numpy())
+    ll_scores["LW nonlinear shrinkage"].append(wishart_logscore(Fwd, NfE, est["LW nonlinear shrinkage"]).cpu().numpy())
+    ll_scores["IW"].append(posterior_predictive_logscore(Fwd, NfE, D_iw).cpu().numpy())
+    ll_scores["SC-SI"].append(posterior_predictive_logscore(Fwd, NfE, D_si).cpu().numpy())
+    # per-day predictive log-score of the forward daily return vectors (Lebesgue density of observed data, no N_forward)
+    Rf = torch.tensor(np.stack([R[e + 1: e + 1 + NF][:, baskets[b]] for b, e in meta]), dtype=DT, device=dev)
+    for nm, Cs in (("SC-SI", D_si), ("IW", D_iw), ("SCM", Cal[:, None]), ("OAS shrinkage", est["OAS shrinkage"][:, None]),
+                   ("LW nonlinear shrinkage", est["LW nonlinear shrinkage"][:, None])):
+        dl_scores[nm].append(daily_return_logscore(Rf, Cs).cpu().numpy())
+        dt_scores[nm].append(daily_t_logscore(Rf, Cs, NU_HAT[fi]).cpu().numpy())
+    # calibration of forward directional variances (assets + equal-weight)
+    ew = torch.ones(1, d, dtype=DT, device=dev) / math.sqrt(d)
+    dirs = torch.cat([torch.eye(d, dtype=DT, device=dev), ew], 0)
+    for nm, Cs in (("SC-SI", D_si), ("IW", D_iw), ("SCM", Cal[:, None].expand(-1, J, -1, -1)),
+                   ("OAS shrinkage", est["OAS shrinkage"][:, None].expand(-1, J, -1, -1)),
+                   ("LW nonlinear shrinkage", est["LW nonlinear shrinkage"][:, None].expand(-1, J, -1, -1))):
+        pit, _, _ = directional_pit(Fwd, NfE, Cs, dirs, gen=torch.Generator(device=dev).manual_seed(9))
+        pit_store[nm].append(pit.cpu().numpy())
+
+
+    # What does he do here????
+
+
+    # per-case posterior over "how many factors are meaningful" (population eigenvalue > 3 x median): P(factor k meaningful) and
+    # the mean / sd of the number of meaningful factors across posterior draws; plug-in = same rule on the sample spectrum
+    ev_all = safe_eigvalsh(D_si).flip(-1)
+    meaningful = (ev_all / ev_all.median(-1, keepdim=True).values) > 3
+    n_draw = meaningful.sum(-1).to(DT)
+    l_pl = torch.linalg.eigvalsh(Cal).flip(-1)
+    fac_store["pm_post"].append(meaningful.to(DT).mean(1)[:, :6].cpu().numpy())
+    fac_store["pm_plug"].append(((l_pl / l_pl.median(-1, keepdim=True).values) > 3).to(DT)[:, :6].cpu().numpy())
+    fac_store["nm_mean"].append(n_draw.mean(1).cpu().numpy()); fac_store["nm_sd"].append(n_draw.std(1).cpu().numpy())
+    del ev_all, meaningful
+    # time series for the first path (figure): posterior of eigenvalue shares and P(meaningful)
+    m0 = torch.tensor(meta[:, 0] == 0, device=dev)
+    Dm = D_si[m0]
+    ev = safe_eigvalsh(Dm).flip(-1)                                    # (m,J,d) descending; m*J can exceed cuSOLVER's batch limit
+    share = ev / ev.sum(-1, keepdim=True)
+    rho = ev / ev.median(-1, keepdim=True).values                       # signal-to-bulk ratio of population eigenvalues
+    l_plug = torch.linalg.eigvalsh(Cal[m0]).flip(-1)
+    rho_plug = l_plug / l_plug.median(-1, keepdim=True).values
+    path_records.append(dict(
+        end=meta[m0.cpu().numpy(), 1], share_mean=share.mean(1)[:, :4].cpu().numpy(), share_lo=torch.quantile(share, 0.1, 1)[:, :4].cpu().numpy(),
+        share_hi=torch.quantile(share, 0.9, 1)[:, :4].cpu().numpy(),
+        p_meaningful=(rho > 3).to(DT).mean(1)[:, :5].cpu().numpy(), plug_meaningful=(rho_plug > 3).to(DT)[:, :5].cpu().numpy(),
+        K_gd=K_gd[m0].cpu().numpy(), K_post=K_si[m0].cpu().numpy(),
+        plug_share=(l_plug / l_plug.sum(-1, keepdim=True))[:, :4].cpu().numpy()))
+    print(f"    fold done in {time.time()-t0:.0f}s", flush=True)
+
+# ------------------------------------------------------------------------------------------------ #
+# summary
+# ------------------------------------------------------------------------------------------------ #
+if args.diag_ks:
+    json.dump(diag_out, open(f"results/{TAG}_diag_ks.json", "w"), indent=1)
+    print(f"saved results/{TAG}_diag_ks.json"); raise SystemExit
+meta_all = np.concatenate(meta_all); fold_all = np.concatenate(fold_all)
+month_id = meta_all[:, 1]                                 # cases in the same month are dependent -> block bootstrap over months
+results = {"N": N, "scale": scale, "scale_fwd": scale_f, "N_forward": NfE, "calib_table": {str(k): v for k, v in calib_table.items()}, "n_cases": int(len(meta_all))}
+var = {n_: np.concatenate(v["var"]) for n_, v in out_cases.items()}
+stf = {n_: np.concatenate(v["stein_fwd"]) for n_, v in out_cases.items()}
+
+print("\n=== out-of-sample min-variance portfolio (unconstrained), 21-day realised variance ===")
+results["mv"] = {}
+for n_ in names:
+    vol = math.sqrt(252 * var[n_].mean())
+    rel = np.log(var[n_] / var["OAS shrinkage"])           # log variance ratio vs OAS (negative = better)
+    m, lo, hi = bootstrap_ci(rel, month_id)
+    results["mv"][n_] = dict(ann_vol=vol, log_var_ratio_vs_OAS=[m, lo, hi], stein_fwd=float(np.median(stf[n_])))
+    print(f"{n_:24s} ann.vol={vol:6.3f}   mean log(var/var_OAS)={m:+.4f} [{lo:+.4f},{hi:+.4f}]   median fwd Stein={np.median(stf[n_]):.3f}")
+Kg, Kp, Kiw = np.concatenate(Ks["GD"]), np.concatenate(Ks["post"]), np.concatenate(Ks["postIW"])
+results["K"] = {"GD_mean": float(Kg.mean()), "post_mean": float(Kp.mean()), "postIW_mean": float(Kiw.mean()),
+                "GD_hist": np.bincount(Kg, minlength=d + 1).tolist(), "post_hist": np.bincount(Kp, minlength=d + 1).tolist()}
+# stability: month-to-month change of K along each path
+def flips(K):
+    ch = []
+    for b in range(args.paths):
+        for fi in range(len(fold_bounds)):
+            m = (meta_all[:, 0] == b) & (fold_all == fi)
+            k = K[m][np.argsort(meta_all[m, 1])]
+            ch.append(np.abs(np.diff(k)).mean() if len(k) > 1 else 0)
+    return float(np.mean(ch))
+results["K"]["GD_mean_abs_change"] = flips(Kg); results["K"]["post_mean_abs_change"] = flips(Kp)
+print(f"\nK selected: GD mean={Kg.mean():.2f} (|dK|/month={results['K']['GD_mean_abs_change']:.2f}) ; "
+      f"Bayes(SC-SI) mean={Kp.mean():.2f} (|dK|/month={results['K']['post_mean_abs_change']:.2f}) ; Bayes(IW) mean={Kiw.mean():.2f}")
+
+print("\n=== predictive log-score of the forward 21-day covariance (vs SCM plug-in) ===")
+results["logscore"] = {}
+ls = {k: np.concatenate(v) for k, v in ll_scores.items()}
+for k in ls:
+    m, lo, hi = bootstrap_ci(ls[k] - ls["SCM"], month_id)
+    results["logscore"][k] = [m, lo, hi]
+    print(f"{k:16s} gain vs SCM = {m:+.3f} [{lo:+.3f},{hi:+.3f}]")
+print("\n=== per-day predictive log-score of the forward daily returns (nats/day; gain vs SCM plug-in) ===")
+results["daily_logscore"] = {}
+dls = {k: np.concatenate(v) for k, v in dl_scores.items()}
+for k in dls:
+    m, lo, hi = bootstrap_ci(dls[k] - dls["SCM"], month_id)
+    results["daily_logscore"][k] = dict(gain_vs_SCM=[m, lo, hi], mean=float(dls[k].mean()))
+    print(f"{k:24s} mean={dls[k].mean():+.4f}  gain vs SCM = {m:+.4f} [{lo:+.4f},{hi:+.4f}]")
+print("\n=== Student-t daily log-score of the forward returns (nats/day), nu per fold " + "/".join(f"{NU_HAT[f]:g}" for f in sorted(NU_HAT)) + " ===")
+results["student_t_logscore"] = {"nu_per_fold": [NU_HAT[f] for f in sorted(NU_HAT)]}
+dts = {k: np.concatenate(v) for k, v in dt_scores.items()}
+for k in dts:
+    m, lo, hi = bootstrap_ci(dts[k] - dts["SCM"], month_id)
+    results["student_t_logscore"][k] = dict(gain_vs_SCM=[m, lo, hi], mean=float(dts[k].mean()))
+    print(f"{k:24s} mean={dts[k].mean():+.4f}  gain vs SCM = {m:+.4f} [{lo:+.4f},{hi:+.4f}]")
+print("\n=== calibration of forward directional variances (asset axes + equal weight) ===")
+results["coverage"] = {}
+for k, v in pit_store.items():
+    p = np.concatenate(v)
+    results["coverage"][k] = coverage_from_pit(torch.tensor(p))
+    print(f"{k:16s} coverage 50/80/95 = " + "/".join(f"{x:.3f}" for x in results['coverage'][k].values()))
+json.dump(results, open(f"results/{OUT}_results.json", "w"), indent=1, default=float)
+np.savez(f"results/{OUT}_arrays.npz", meta=meta_all, fold=fold_all, Kg=Kg, Kp=Kp, Kiw=Kiw, risk=np.concatenate(risk_store),
+         dates=dates.values.astype("datetime64[D]").astype(np.int64),
+         **{f"var_{i}": var[n_] for i, n_ in enumerate(names)}, names=np.array(names),
+         **{f"path{fi}_{k}": v for fi, rec in enumerate(path_records) for k, v in rec.items()},
+         **{"pit_" + k.replace(" ", "_"): np.concatenate(v) for k, v in pit_store.items()},      # (n_cases, d+1): asset axes + equal weight
+         **{"ll_" + k.replace(" ", "_"): np.concatenate(v) for k, v in ll_scores.items()},       # per-case forward predictive log-score
+         **{"dl_" + k.replace(" ", "_"): np.concatenate(v) for k, v in dl_scores.items()},       # per-case per-day return log-score
+         **{"dt_" + k.replace(" ", "_"): np.concatenate(v) for k, v in dt_scores.items()},       # same, Student-t predictive
+         nu_hat=np.array([NU_HAT[f] for f in sorted(NU_HAT)]),
+         **{k: np.concatenate(v) for k, v in fac_store.items()})
+print("saved", OUT)

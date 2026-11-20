@@ -1,0 +1,54 @@
+% run fin_d12_nw63_s0_mlp_w1024_d4_neff03_nfe6_o30_selT: N=19, N_forward=6, 3016 test cases; OAS/LW with n=N;
+% volatility terciles 12.2% / 16.4%; Student-t nu per fold 7/5.2/5.2; month-block bootstrap 95% CI
+
+% --- estimators (min-variance portfolio)
+
+\begin{tabular}{@{}lcc@{}}
+    \toprule
+    Estimator & ann.\ vol.\ (\%) & log ratio to OAS $\downarrow$ \\
+    \midrule
+    OAS & 14.35 & $0$ \\
+    Sample cov. & 14.84 & $+0.095$ {\scriptsize$[0.076,\,0.116]$} \\
+    LW-NLS & 14.43 & $+0.034$ {\scriptsize$[0.022,\,0.047]$} \\
+    \midrule
+    IW-ML posterior mean & 14.38 & $+0.004$ {\scriptsize$[-0.003,\,0.012]$} \\
+    \scsi{} posterior mean & 14.12 & $\mathbf{-0.032}$ {\scriptsize$[-0.041,\,-0.023]$} \\
+    \scsi{} Stein-optimal & 14.20 & $-0.030$ {\scriptsize$[-0.039,\,-0.022]$} \\
+    \midrule
+    PCA, $K{=}1$ & 16.07 & $+0.233$ {\scriptsize$[0.212,\,0.254]$} \\
+    PCA, $K{=}3$ & 14.96 & $+0.093$ {\scriptsize$[0.076,\,0.113]$} \\
+    PCA, Gavish--Donoho $K$ & 15.20 & $+0.129$ {\scriptsize$[0.112,\,0.152]$} \\
+    PCA, Bayes $K$ (IW-ML) & 15.02 & $+0.118$ {\scriptsize$[0.100,\,0.139]$} \\
+    PCA, Bayes $K$ (\scsi{}) & 14.95 & $+0.090$ {\scriptsize$[0.072,\,0.109]$} \\
+    \bottomrule
+\end{tabular}
+
+% --- (a) calibration and scores
+
+\begin{tabular}{@{}lccccccc@{}}
+    \toprule
+     & overall & \multicolumn{3}{c}{80\% by volatility tercile} & \multicolumn{3}{c}{log-score gain vs.\ sample cov.\ $\uparrow$} \\
+    \cmidrule(lr){3-5}\cmidrule(lr){6-8}
+    (a) Method & 50/80/95 & low & mid & high & tempered & Gaussian & Student-$t$ \\
+    \midrule
+    Sample cov. & 0.48/0.77/0.91 & 0.76 & 0.81 & 0.75 & $0$ & $0$ & $0$ \\
+    OAS & 0.47/0.77/0.91 & 0.77 & \textbf{0.80} & 0.73 & $+3.1$ {\scriptsize$[1.8,\,4.7]$} & $+0.51$ {\scriptsize$[0.30,\,0.78]$} & $+0.21$ {\scriptsize$[0.17,\,0.25]$} \\
+    LW-NLS & 0.47/0.76/0.91 & 0.76 & \textbf{0.80} & 0.72 & $+2.4$ {\scriptsize$[1.6,\,3.4]$} & $+0.39$ {\scriptsize$[0.27,\,0.56]$} & $+0.08$ {\scriptsize$[0.05,\,0.11]$} \\
+    IW-ML & 0.50/0.81/0.94 & \textbf{0.81} & 0.82 & \textbf{0.79} & $+1.1$ {\scriptsize$[0.1,\,2.3]$} & $+0.94$ {\scriptsize$[0.71,\,1.25]$} & $+0.30$ {\scriptsize$[0.27,\,0.33]$} \\
+    \scsi{} & 0.53/0.82/0.94 & 0.84 & 0.85 & 0.79 & $\mathbf{+3.9}$ {\scriptsize$[2.7,\,5.3]$} & $\mathbf{+1.21}$ {\scriptsize$[0.97,\,1.52]$} & $\mathbf{+0.48}$ {\scriptsize$[0.45,\,0.52]$} \\
+    \bottomrule
+\end{tabular}
+
+% --- (b) log ratio to OAS by volatility tercile
+
+\begin{tabular}{@{}lccc@{}}
+    \toprule
+    (b) Estimator & low vol. & mid vol. & high vol. \\
+    \midrule
+    \scsi{} posterior mean & $\mathbf{-0.045}$ {\scriptsize$[-0.060,\,-0.031]$} & $\mathbf{-0.022}$ {\scriptsize$[-0.038,\,-0.005]$} & $-0.028$ {\scriptsize$[-0.044,\,-0.013]$} \\
+    \scsi{} Stein-optimal & $-0.040$ {\scriptsize$[-0.053,\,-0.026]$} & $-0.021$ {\scriptsize$[-0.036,\,-0.005]$} & $\mathbf{-0.030}$ {\scriptsize$[-0.043,\,-0.018]$} \\
+    IW-ML posterior mean & $+0.002$ {\scriptsize$[-0.007,\,0.012]$} & $-0.000$ {\scriptsize$[-0.012,\,0.011]$} & $+0.011$ {\scriptsize$[-0.002,\,0.027]$} \\
+    LW-NLS & $+0.007$ {\scriptsize$[-0.009,\,0.023]$} & $+0.036$ {\scriptsize$[0.013,\,0.058]$} & $+0.059$ {\scriptsize$[0.034,\,0.086]$} \\
+    Sample cov. & $+0.028$ {\scriptsize$[-0.000,\,0.059]$} & $+0.102$ {\scriptsize$[0.070,\,0.136]$} & $+0.155$ {\scriptsize$[0.118,\,0.194]$} \\
+    \bottomrule
+\end{tabular}

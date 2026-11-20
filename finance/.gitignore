@@ -1,0 +1,5 @@
+# regenerated: data parsed from ff48.zip by prepare_finance.py, trained checkpoints (fin_exp.py)
+data/
+48_Industry_Portfolios_Daily.csv
+results/*_ckpt/
+__pycache__/
