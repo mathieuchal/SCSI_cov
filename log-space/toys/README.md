@@ -30,7 +30,7 @@ Each setting is defined in one place:
 |---|---|
 | `paths.py` | the production runs: data regimes (`inf`, `M5000`), their folders, the architecture (`tag`) of each toy (`ARCH`), the evaluation grid `GRID` |
 | `toys.py` | the toy priors (`TOYS`) and their oracle samplers (direct or HMC) |
-| `toy_train.py` | training (SC-SI, self-consistent EM) |
+| `toy_train.py`, `train_inf.sh`, `train_M5000.sh` | training (SC-SI, self-consistent EM) |
 | `toy_data.py` | the evaluation data: validation pairs of the log-score, the 128 test tasks of W1, the IW-ML fit ensemble |
 | `logscore.py`, `w1.py` | the scoring of each method (oracle, IW-ML, SC-SI), with its sampling seeds |
 | `runs.py` | loading a checkpoint, listing the checkpoints of a run |
@@ -50,17 +50,23 @@ Each setting is defined in one place:
 ## 1. Train: `toy_train.py`
 
 ```bash
+bash train_inf.sh       # the seven M=inf runs, every stage, one run at a time (DRY=1: print the commands only)
+```
+
+`train_inf.sh` runs, for each toy, the commands below. For one toy:
+
+```bash
 T=factor_d8_inf; TAG=mlp_w512_d4; R=results/toys_M=-1
 python toy_train.py --toy $T --tag $TAG > ../logs/${T}_${TAG}_train.log 2>&1                     # stage 1: k=0..700, cosine outer lr
 python toy_train.py --toy $T --tag $TAG --n_outer 1000 --resume $R/${T}_${TAG}_k700.pt \
        > ../logs/${T}_${TAG}_train_k700-1000.log 2>&1                                             # stage 2: constant lr 5e-5
 ```
 
-The M=5000 runs are trained by `bash train_M5000.sh` (one stage, see below).
-
 Add `--hidden 1024` for `iso_diag_d8_inf`, and `--arch resnet --hidden 1024` for `ar1_d8_inf`, which has a third stage: `--n_outer 2000 --resume $R/${T}_${TAG}_k1000.pt`. On `--resume`, the architecture is read from the checkpoint.
 
-The run is fully seeded. The weights, the normalisation, the three generator states and the outer-lr schedule are stored in every checkpoint. A rerun with the same commands reproduces the checkpoints bit for bit. With finite data, `--resume` redraws the same fixed training ensemble as the original run.
+The M=5000 runs are trained by `bash train_M5000.sh` (one stage, see below).
+
+The run is fully seeded. The weights, the normalisation, the three generator states and the outer-lr schedule are stored in every checkpoint. A rerun with the same commands reproduces the checkpoints bit for bit on the same hardware and software versions (`requirements.txt`). On another GPU or with other library versions, floating-point reductions may differ slightly, so the checkpoints and the numbers derived from them can differ at the level of rounding errors. With finite data, `--resume` redraws the same fixed training ensemble as the original run.
 
 | file | content |
 |---|---|
