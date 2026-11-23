@@ -1,0 +1,8 @@
+# regenerated: EDF files and parsed covariances (eeg_data.py), checkpoints and per-case arrays (eeg_exp.py, eeg_exp2.py)
+data/
+results/*_ckpt/
+results/*.npz
+figs/
+__pycache__/
+.ipynb_checkpoints/
+paper/
