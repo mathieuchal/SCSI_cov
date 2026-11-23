@@ -6,6 +6,18 @@ Setup: the same Python 3.11 environment as `log-space` (`pip install -r ../log-s
 
 **What is versioned.** The code and the JSON result files of the paper run, which are enough to rebuild the figure (step 5) without a GPU. The data (`data/`), the checkpoints (`results/*_ckpt/`) and the per-case arrays (`results/*.npz`) are not versioned; steps 0–4 regenerate them.
 
+## All steps at once: `run_cv.py`
+
+After step 0, `run_cv.py` runs steps 1–5 for the five folds. For step 2, it reads each fold's selected checkpoint from `{tag}_results.json`.
+
+```bash
+python run_cv.py                                        # steps 1-5, all folds
+python run_cv.py --folds 2 3 --stages exp splithalf     # steps 1-2 for some folds only (e.g. one process per GPU)
+python run_cv.py --stages pool figs                     # steps 3-5 only, from the existing per-fold files (no GPU)
+```
+
+`eeg_exp.py` skips training when a fold's checkpoints already exist; `--retrain` forces it. The sections below detail each step.
+
 ## 0. Data: `eeg_data.py`
 
 Download the baseline runs `S{001..109}R01.edf` (eyes open) and `S{001..109}R02.edf` (eyes closed) of [eegmmidb](https://physionet.org/content/eegmmidb/1.0.0/) into `data/eeg/`, then:
@@ -71,7 +83,7 @@ Outputs: `{tag}_splithalf_k{k}.json` and `_arrays.npz` (per-case PIT values, key
 ## 3. Classification pooled over the folds: `eeg_cv_classif.py`
 
 ```bash
-python eeg_cv_classif.py eeg_w4_s0_k1.0_e0.65_rvlogscore 5
+python eeg_cv_classif.py --prefix eeg_w4_s0_k1.0_e0.65_rvlogscore --folds 5
 cp results/eeg_w4_s0_k1.0_e0.65_rvlogscore_cv5_wide_classification.json results/eeg_w4_s0_k1.0_e0.65_cv5_wide_classification.json
 ```
 
@@ -85,7 +97,7 @@ The `_rvlogscore_cv5f{f}_wide_*` files are copies of the `_rv_cv5f{f}_wide_*` fi
 ## 4. Calibration pooled over the folds: `eeg_cv_pool_calib.py`
 
 ```bash
-python eeg_cv_pool_calib.py eeg_w4_s0_k1.0_e0.65_rvlogscore eeg_w4_s0_k1.0_e0.65_rv 5
+python eeg_cv_pool_calib.py --results_prefix eeg_w4_s0_k1.0_e0.65_rvlogscore --splithalf_prefix eeg_w4_s0_k1.0_e0.65_rv --folds 5
 # -> results/eeg_w4_s0_k1.0_e0.65_rvlogscore_cv5_{nextwindow,splithalf}.json
 ```
 
@@ -120,6 +132,7 @@ python eeg_figs.py     # -> figs/eeg_w4_s0_k1.0_e0.65_E1_calibration.png, figs/e
 
 | file | role |
 |---|---|
+| `run_cv.py` | runs steps 1–5 over the five folds |
 | `scsi.py`, `model.py` | SC-SI (Föllmer SDE sampler, EM training) and drift networks |
 | `covutils.py` | Wishart log-scores, PIT, coverage, shrinkage baselines, IW prior, bootstrap CIs |
 | `toys.py`, `toy_eval.py` | imported by `paper_figs.py` (W1 helpers); not used by the EEG pipeline itself |

@@ -6,17 +6,21 @@ subjects, in the same JSON layout paper_figs.fig_eeg reads for panels (a) and (b
   * log-score gains vs sample covariance: per-case scores pooled over folds, 95% CI by bootstrap over subjects
     (covutils.bootstrap_ci), exactly as eeg_exp.py / eeg_exp2.py do within one split.
 
-Usage: python eeg_cv_pool_calib.py [results_prefix] [splithalf_prefix] [K]
-   e.g. python eeg_cv_pool_calib.py eeg_w4_s0_k1.0_e0.65_rvlogscore eeg_w4_s0_k1.0_e0.65_rv 5
-Writes results/{results_prefix}_cv{K}_nextwindow.json and results/{results_prefix}_cv{K}_splithalf.json.
+Usage: python eeg_cv_pool_calib.py [--results_prefix RP] [--splithalf_prefix SP] [--folds K]
+Writes results/{RP}_cv{K}_nextwindow.json and results/{RP}_cv{K}_splithalf.json.
 """
-import json, sys
+import argparse, json
 import numpy as np
 from covutils import bootstrap_ci
 
-RP = sys.argv[1] if len(sys.argv) > 1 else "eeg_w4_s0_k1.0_e0.65_rvlogscore"
-SP = sys.argv[2] if len(sys.argv) > 2 else "eeg_w4_s0_k1.0_e0.65_rv"
-K = int(sys.argv[3]) if len(sys.argv) > 3 else 5
+ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+ap.add_argument("--results_prefix", default="eeg_w4_s0_k1.0_e0.65_rvlogscore",
+                help="prefix of the eeg_exp.py per-fold files ({RP}_cv{K}f{f}_wide_results.json, _arrays.npz) and of the outputs")
+ap.add_argument("--splithalf_prefix", default="eeg_w4_s0_k1.0_e0.65_rv",
+                help="prefix of the eeg_exp2.py per-fold files ({SP}_cv{K}f{f}_wide_splithalf_k{k}.json, _arrays.npz)")
+ap.add_argument("--folds", type=int, default=5, help="number of CV folds K")
+args = ap.parse_args()
+RP, SP, K = args.results_prefix, args.splithalf_prefix, args.folds
 L = lambda p: json.load(open(p))
 
 

@@ -1,20 +1,24 @@
 """Eyes-open vs eyes-closed classification, cross-validated over ALL subjects.
 
-Reads the per-fold outputs of `eeg_exp.py --cv_folds K --cv_fold F --select worstks` (each fold: an SC-SI prior and a logistic
-regression trained on other subjects, checkpoint chosen on 10 validation subjects, then tested on the fold's held-out subjects),
-pools the held-out predictions (every subject is tested exactly once) and reports:
+Reads the per-fold outputs of `eeg_exp.py --cv_folds K --cv_fold F` (each fold: an SC-SI prior and a logistic regression
+trained on other subjects, checkpoint chosen by log-score on 10 validation subjects, then tested on the fold's held-out
+subjects), pools the held-out predictions (every subject is tested exactly once) and reports:
   * pooled accuracy / NLL / ECE / selective accuracy,
   * per-fold accuracy (does the effect replicate across folds?),
   * per-subject accuracies and paired subject-level tests (bootstrap over subjects, Wilcoxon signed-rank, sign counts).
 
-Usage: python eeg_cv_classif.py [tag_prefix] [n_folds]     e.g. eeg_w4_s0_k1.0_e0.65 5
+Usage: python eeg_cv_classif.py [--prefix P] [--folds K]
+Reads results/{P}_cv{K}f{f}_wide_{results.json,arrays.npz}; writes results/{P}_cv{K}_wide_classification.json.
 """
-import json, sys
+import argparse, json
 import numpy as np
 from scipy import stats
 
-B = sys.argv[1] if len(sys.argv) > 1 else "eeg_w4_s0_k1.0_e0.65"
-K = int(sys.argv[2]) if len(sys.argv) > 2 else 5
+ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+ap.add_argument("--prefix", default="eeg_w4_s0_k1.0_e0.65_rvlogscore", help="per-fold file prefix, before _cv{K}f{f}_wide")
+ap.add_argument("--folds", type=int, default=5, help="number of CV folds K")
+args = ap.parse_args()
+B, K = args.prefix, args.folds
 OURS = "Posterior-trained LR, posterior-averaged (ours)"
 BASE = ["SCM -> LR (plug-in)", "OAS -> LR (plug-in)", "NLS -> LR (plug-in)"]
 
