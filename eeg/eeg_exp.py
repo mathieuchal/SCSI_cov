@@ -11,7 +11,7 @@ import argparse, json, math, os, time
 import numpy as np
 import torch
 
-from scsi import SCSI, SCSIConfig, Sym, Drift, wishart_channel, DT
+from scsi import SCSI, SCSIConfig, Drift, wishart_channel, DT
 from covutils import (IWPrior, oas_shrink, nls_shrink, wishart_logscore, posterior_predictive_logscore, directional_pit,
                       coverage_from_pit, airm_distance, tangent_features, inv_sqrt, bootstrap_ci, worst_case_pit_ks)
 
@@ -68,7 +68,6 @@ if args.cv_folds > 0:                                   # K-fold CV: every subje
 print(f"split subjects: train={len(tr)} val={len(va)} test={len(te)}")
 Ce_train = scm_win[tr].reshape(-1, d, d)                # unlabeled pool of noisy covariances, both conditions
 print("training ensemble M =", Ce_train.shape[0])
-S_ = Sym(d, device=dev)
 
 
 def make_cases(subj_idx, with_next=True):
@@ -89,7 +88,8 @@ def _save_ckpt(net, path):
 
 def _load_ckpt(net, path):
     z_ = torch.load(path, map_location="cpu")
-    net.load_state_dict(z_["state"] if "state" in z_ else z_)          # older checkpoints are a bare state_dict
+    net.load_state_dict(z_["state"] if "state" in z_ else z_)          # older checkpoints are a bare state_dict; restores mu, sd
+    net.out_scale = float(net.sd.mean())                                # plain attribute (not in the state_dict): rebuild it from sd
     return net
 
 
@@ -124,9 +124,8 @@ if have and not args.retrain:
     val_curve = {int(k): v for k, v in json.load(open(f"results/{TAG}_val.json")).items()}
     if os.path.exists(f"results/{TAG}_valwc.json"):
         val_wc = {int(k): v for k, v in json.load(open(f"results/{TAG}_valwc.json")).items()}
-    # rebuild network shell with same normalisation stats
-    Ye = S_.encode(Ce_train, 0.0)
-    model.ema_net = model.make_net(Ye.mean(0), Ye.std(0).clamp_min(1e-3))
+    # network shell: mu, sd and out_scale are set from the checkpoint by _load_ckpt
+    model.ema_net = model.make_net(torch.zeros(model.S.p), torch.ones(model.S.p))
     print("loaded cached checkpoints")
 else:
     t0 = time.time()
@@ -291,7 +290,7 @@ Iref = inv_sqrt(Cref)
 
 
 def feats(C):
-    return tangent_features(C, Iref, S_).cpu().numpy()
+    return tangent_features(C, Iref, model.S).cpu().numpy()
 
 
 tr_C = scm_win[tr].reshape(-1, d, d)

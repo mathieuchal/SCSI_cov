@@ -19,7 +19,7 @@ from toy_eval import STATS, w1_norm
 setup()
 plt.rcParams.update({"font.size": 7, "axes.titlesize": 7.4, "axes.labelsize": 7, "xtick.labelsize": 6, "ytick.labelsize": 6,
                      "legend.fontsize": 6.2, "pdf.fonttype": 42, "axes.titlelocation": "left", "lines.linewidth": 1.4})
-PDF, PNG = "paper/fig_real", "figs/paper"     # was "../paper/fig_real" (paper/ next to the code dir); here under /home/ubuntu
+PDF, PNG = "paper/fig_real", "figs/paper"
 os.makedirs(PDF, exist_ok=True); os.makedirs(PNG, exist_ok=True)
 EEG_TAG = "eeg_w4_s0_k1.0_e0.65"
 FIN_TAG = "fin_d12_nw63_s0_wcsel_wide_k30_ks6-2-6"

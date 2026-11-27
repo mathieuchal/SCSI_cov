@@ -8,7 +8,7 @@ Uses the SC-SI checkpoint / IW baseline / subject split from eeg_exp.py (test su
 import argparse, json, math, sys
 import numpy as np, torch
 
-from scsi import SCSI, SCSIConfig, Sym, Drift, wishart_channel, DT, safe_eigvalsh
+from scsi import SCSI, SCSIConfig, Drift, wishart_channel, DT, safe_eigvalsh
 from covutils import (IWPrior, oas_shrink, nls_shrink, wishart_logscore, posterior_predictive_logscore, directional_pit,
                       coverage_from_pit, airm_distance, bootstrap_ci)
 
@@ -39,15 +39,15 @@ elif a.cv_folds > 0:                                       # must stay identical
     rest = np.concatenate([folds[(a.cv_fold + i) % a.cv_folds] for i in range(1, a.cv_folds)])
     va, tr = rest[:n_va], rest[n_va:]
 Ce_train = scm_win[tr].reshape(-1, d, d)
-S_ = Sym(d, device=dev)
 zck = torch.load(f"results/{TAG}_ckpt/k{KBEST}.pt", map_location="cpu")
 hid, dep = (zck["hidden"], zck["depth"]) if "state" in zck else (256, 4)      # older checkpoints: bare state_dict, default net
 arch = zck.get("arch", "mlp") if "state" in zck else "mlp"                    # checkpoints before --arch existed: plain MLP Drift
 cfg = SCSIConfig(N=N, d=d, kappa=1.0, init="deconv", log_prior_inflate=1.5, threads=a.threads, device=str(dev), hidden=hid, depth=dep, arch=arch)
 model = SCSI(cfg)
-Ye = S_.encode(Ce_train, 0.0)
-model.ema_net = model.make_net(Ye.mean(0), Ye.std(0).clamp_min(1e-3))
-model.ema_net.load_state_dict(zck["state"] if "state" in zck else zck)
+p = model.S.p                                                                   # d(d+1)/2, from the model's own Sym
+model.ema_net = model.make_net(torch.zeros(p), torch.ones(p))                   # shell: mu, sd are overwritten just below
+model.ema_net.load_state_dict(zck["state"] if "state" in zck else zck)          # restores the buffers mu, sd of the training normalisation
+model.ema_net.out_scale = float(model.ema_net.sd.mean())                        # plain attribute (not in the state_dict): rebuild it from sd
 iw = IWPrior(Ce_train, N, iters=800)
 print(f"device={dev}  N={N} d={d}; test subjects={len(te)}; SC-SI checkpoint k={KBEST}")
 
